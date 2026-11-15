@@ -6,9 +6,10 @@ Windows-only *the t.racks DSP 206 Processor Editor V1.05*, with a cleaner,
 faster interface.
 
 > **Project status: early.** The device protocol has been reverse engineered and
-> documented ([claude/docs/protocol.md](claude/docs/protocol.md)). The
-> application itself is **not written yet**. The sections below marked
-> *(planned)* describe the target.
+> documented ([claude/docs/protocol.md](claude/docs/protocol.md)). The protocol
+> library (`crates/dsp206-proto`) is implemented and tested. The application
+> itself is **not written yet**. The sections below marked *(planned)* describe
+> the target.
 
 ## Features (planned)
 
@@ -73,6 +74,19 @@ This installs both binaries, a desktop entry and an icon. Remove them with
 Good to know: the DSP accepts only one network connection at a time. Close the
 Windows editor or any other client first. After a disconnection, wait about one
 minute before reconnecting.
+
+## Development
+
+Requirements: Rust 1.84 or newer (`cargo`, `rustfmt`, `clippy`), Python 3, `make`.
+
+```bash
+make check
+```
+
+This runs the formatter check, clippy with warnings as errors, the Rust tests
+(including replays of frames captured on a real DSP 206) and the Python tests
+for the tools and the documentation. Other targets: `make test`, `make lint`,
+`make fmt`, `make design`.
 
 ## Documentation
 

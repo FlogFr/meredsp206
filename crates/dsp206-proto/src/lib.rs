@@ -5,10 +5,11 @@
 //! documented there, and tests must cover it.
 
 pub mod command;
+pub mod edit;
 pub mod frame;
 pub mod program;
 pub mod units;
 
-pub use command::{Channel, Reply, Request};
+pub use command::{Channel, Meters, Reply, Request, ToneSource};
 pub use frame::{Frame, FrameDecoder, FrameError};
 pub use program::{Program, ProgramAssembler, ProgramError};
