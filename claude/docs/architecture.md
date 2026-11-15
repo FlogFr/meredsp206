@@ -1,7 +1,8 @@
 # Architecture (planned)
 
-Status: **not implemented yet**. This is the target design agreed for the first
-implementation. Update this file whenever the design changes.
+Status: `dsp206-proto` is **implemented and tested**. `dsp206-link`,
+`dsp206-cli` and `dsp206-gtk` are planned. Update this file whenever the design
+changes.
 
 ## 1. Stack
 
@@ -25,15 +26,23 @@ crates/
 data/             .desktop file, AppStream metainfo, icons
 ```
 
-### 2.1 `dsp206-proto`
+### 2.1 `dsp206-proto` (implemented)
 
-- `Frame::encode(dst, cmd, data)` and a streaming `FrameDecoder` that cuts by
-  length (no DLE stuffing) and checks the XOR.
-- `Command` enum with one variant per command of `protocol.md`, plus `Reply` parsing.
-- `Program` struct with `from_bytes(&[u8; 928])` and `to_bytes()`, following
-  `memory-map.md` exactly. Round-trip tests use the captured default program.
-- `units` module: gain, frequency, Q, slope, ratio and time conversions, with tests
-  against the tables in `memory-map.md`.
+No dependencies, no I/O.
+
+- `frame`: `Frame { src, dst, cmd, data }` with `encode()`/`decode()`, `checksum()`,
+  and a streaming `FrameDecoder` (iterator) that cuts by length (no DLE
+  stuffing), checks the trailer and XOR, and resynchronises after garbage.
+- `command`: `Channel` (0–7), `Request` with one variant per documented command
+  (`code()`, `payload()`, `frame(dev)`, `is_read_only()`, `reply_code()`,
+  `coalesce_key()`), `READ_ONLY_CODES`, `ALL_CODES`, `Reply::parse()` and `Meters`.
+- `program`: `Program` (header, name, 2 `InputChannel`, 6 `OutputChannel`,
+  `Globals`) with lossless `from_bytes()`/`to_bytes()` over the 928 bytes,
+  `to_pages()`, and `ProgramAssembler` to collect `0x24` pages.
+- `units`: frequency, gains, thresholds, times, delay, Q/ratio/GEQ tables, slope
+  and PEQ type labels, meter decoding.
+- Tests: unit tests per module, `tests/captures.rs` (real frames), and
+  `tests/docs_sync.rs` (code ↔ docs ↔ probe whitelist).
 
 ### 2.2 `dsp206-link`
 
@@ -57,9 +66,10 @@ data/             .desktop file, AppStream metainfo, icons
 
 See `design/*.png` for the target look.
 
-## 3. Build and packaging
+## 3. Build, test and packaging
 
-- `cargo build --release` produces `target/release/meredsp206` and `dsp206`.
+- `make check` runs rustfmt, clippy (`-D warnings`) and all Rust and Python tests.
+- `cargo build --release` will produce `target/release/meredsp206` and `dsp206`.
 - Build dependencies on Debian: `libgtk-4-dev`, `libadwaita-1-dev`, `pkg-config`.
 - `make install PREFIX=/usr/local` installs binaries, the `.desktop` file and icons.
   A `.deb` can be produced later with `cargo-deb`.

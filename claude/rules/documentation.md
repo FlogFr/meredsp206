@@ -15,6 +15,10 @@ is in another language.
 
 ## Keep them true
 
+- **`CLAUDE.md` is updated at the end of every user request** that changes
+  something it describes: new standing instruction, rule, command, directory,
+  crate or project status. Record the user's standing instructions there (in
+  English) so future sessions follow them.
 - Update the relevant doc **in the same change** as the code or discovery it
   describes. A protocol fact used in code must be in `protocol.md` or
   `memory-map.md`.
@@ -26,3 +30,6 @@ is in another language.
 - When the design changes, update `design/src/*.html`, re-render the PNGs with
   `design/render.sh`, and commit both.
 - Add new docs to the index in `CLAUDE.md`.
+- `tools/tests/test_docs.py` enforces part of this: relative links resolve,
+  every file in `claude/docs/` and `claude/rules/` is linked from `CLAUDE.md`,
+  every design PNG has an HTML source, and docs read as English.

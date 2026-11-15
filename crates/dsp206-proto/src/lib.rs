@@ -9,6 +9,6 @@ pub mod frame;
 pub mod program;
 pub mod units;
 
-pub use command::{Channel, Reply, Request};
+pub use command::{Channel, Meters, Reply, Request};
 pub use frame::{Frame, FrameDecoder, FrameError};
 pub use program::{Program, ProgramAssembler, ProgramError};

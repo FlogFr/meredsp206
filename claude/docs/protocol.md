@@ -80,7 +80,7 @@ DSP → PC   10 02 01 00 02 10 19 10 03 0b                                connec
 PC  → DSP  10 02 00 01 01 13 10 03 12                                   identify
 DSP → PC   10 02 01 00 0e 13 44 53 50 32 30 36 20 56 30 31 30 35 50 10 03 4c
                                                                         "DSP206 V0105P"
-PC  → DSP  10 02 00 01 02 27 00 10 03 2b                                read program page 0
+PC  → DSP  10 02 00 01 02 27 00 10 03 25                                read program page 0
 DSP → PC   10 02 01 00 34 24 00 ff 00 44 65 66 61 ... 10 03 bf         page 0 (50 data bytes)
 ```
 

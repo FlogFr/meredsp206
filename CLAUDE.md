@@ -5,25 +5,41 @@ t.racks DSP 206 loudspeaker processor over the LAN. It replaces the Windows-only
 *the t.racks DSP 206 Processor Editor V1.05*, whose protocol was reverse engineered
 for this project.
 
-Status: reverse engineering done (protocol and memory map documented). The app
-itself is not implemented yet.
+Status: protocol and memory map documented. The pure protocol crate
+`crates/dsp206-proto` (frames, commands, replies, 928-byte program, unit
+conversions) is implemented and tested. Link layer, CLI and GUI are not written yet.
 
-## Read before working
+## Working agreement (applies to every request)
 
-Rules (instructions for you, always apply):
+1. **Keep this file current.** At the end of each user request, update
+   `CLAUDE.md` whenever the request changed something it describes: a new rule or
+   standing instruction from the user, a new command, a new directory or crate,
+   a status change. New docs and rules must be linked below. `tools/tests/test_docs.py`
+   checks the index.
+2. **Maintain unit tests.** Every change comes with tests. Run `make check`
+   before finishing, and report its real result. See
+   [claude/rules/testing.md](claude/rules/testing.md).
+3. Talk to the user in their language (French so far). Write every project file in
+   English.
+4. Never send state-changing commands to the real device without approval. See
+   [claude/rules/device-safety.md](claude/rules/device-safety.md).
+
+## Rules (instructions for you, always apply)
 
 - [claude/rules/device-safety.md](claude/rules/device-safety.md): a real DSP is on
   the LAN. What you may send without asking, and what needs approval.
+- [claude/rules/testing.md](claude/rules/testing.md): tests on every change,
+  where each kind of test lives, `make check`.
 - [claude/rules/documentation.md](claude/rules/documentation.md): docs in English,
   where each kind of doc lives, confidence tags, keep docs in sync.
-- [claude/rules/coding.md](claude/rules/coding.md): Rust workspace conventions,
-  tests, performance.
+- [claude/rules/coding.md](claude/rules/coding.md): Rust workspace conventions and
+  performance.
 - [claude/rules/reverse-engineering.md](claude/rules/reverse-engineering.md):
   handling vendor files, scratch dirs, recording findings.
 - [claude/rules/design.md](claude/rules/design.md): how `design/*.png` is produced
   and the visual conventions.
 
-Product and technical docs (keep them current):
+## Product and technical docs (keep them current)
 
 - [claude/docs/overview.md](claude/docs/overview.md): device, full feature
   inventory, goals.
@@ -33,19 +49,24 @@ Product and technical docs (keep them current):
   and value encodings.
 - [claude/docs/connection.md](claude/docs/connection.md): observed link quirks and
   the client rules they imply.
-- [claude/docs/architecture.md](claude/docs/architecture.md): planned crates and
-  stack.
+- [claude/docs/architecture.md](claude/docs/architecture.md): crates and stack,
+  implemented and planned.
 - [claude/docs/original-app.md](claude/docs/original-app.md): structure of the
   Windows editor and its key function addresses.
 - [claude/docs/reverse-engineering.md](claude/docs/reverse-engineering.md): method,
   tools, what remains.
 
-Other locations:
+## Repository layout
 
-- `README.md`: user documentation, plus build and install instructions.
-- `design/`: target UI mockups (`*.png`), their HTML sources (`src/`) and
-  `render.sh`.
-- `tools/re/`: reverse-engineering scripts. `tools/probe/`: read-only device probe.
+| Path | Content |
+|---|---|
+| `crates/dsp206-proto/` | Protocol crate: `frame`, `command`, `program`, `units` modules, plus `tests/` (captures, docs sync) |
+| `tools/probe/` | Read-only device dump tool (`dsp206_dump.py`) |
+| `tools/re/` | Reverse-engineering scripts and `captures/` (real frames, used as test vectors) |
+| `tools/tests/` | Python tests for the tools and the docs |
+| `design/` | Target UI mockups (`*.png`), HTML sources (`src/`), `render.sh` |
+| `claude/` | Docs (`docs/`) and rules (`rules/`) for Claude |
+| `README.md` | User documentation, build and install instructions |
 
 ## Key facts (details in the docs)
 
@@ -55,16 +76,20 @@ Other locations:
 - Channels: 0 = InA, 1 = InB, 2–7 = Out1–Out6.
 - Program = 928 bytes, read as 19 pages of 50 bytes with `0x27 [p]` → `0x24`.
 - Keep one long-lived connection, one request in flight, 800 ms timeout.
-  Reconnecting quickly makes the device go silent for about a minute.
+  The device currently goes silent about 1–2 s after connect. This is still
+  being investigated, see [claude/docs/connection.md](claude/docs/connection.md).
 
 ## Commands
 
-No code yet. Once the workspace exists (see `claude/docs/architecture.md`):
-
 ```bash
-cargo build --release
-cargo test --all
-cargo clippy --all-targets -- -D warnings
+make check          # everything below: fmt check, clippy -D warnings, all tests
+make test           # Rust (cargo test --workspace --all-targets) + Python tests
+make test-rust
+make test-python    # python3 -I -m unittest discover -s tools/tests
+make lint
+make fmt
+make design         # re-render design/*.png from design/src/*.html
 ```
 
-Render design mockups: `design/render.sh`.
+Read-only device dump (wait 60 s between runs):
+`python3 -I tools/probe/dsp206_dump.py -o dump.json`.
