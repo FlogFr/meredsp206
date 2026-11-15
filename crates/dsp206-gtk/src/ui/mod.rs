@@ -66,6 +66,7 @@ impl Ui {
                 "applications-science-symbolic",
             ),
             LinkKind::Device => (format!("DSP 206 · {addr}"), "network-wired-symbolic"),
+            LinkKind::Usb => ("DSP 206 · USB".to_string(), "media-removable-symbolic"),
         };
         self.link_button
             .set_child(Some(&widgets::icon_label(icon, &label)));
@@ -78,7 +79,7 @@ impl Ui {
                 }
             }
             LinkKind::Connecting => parts.push("Connecting…".into()),
-            LinkKind::Device | LinkKind::Demo => {
+            LinkKind::Device | LinkKind::Usb | LinkKind::Demo => {
                 if let Some(id) = &m.identity {
                     parts.push(id.clone());
                 }

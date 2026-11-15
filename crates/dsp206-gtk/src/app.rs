@@ -3,11 +3,12 @@
 use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::VecDeque;
 use std::net::{IpAddr, SocketAddr};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use adw::prelude::*;
-use dsp206_link::{Event, Health, Link, LinkConfig, MockDevice, MockOptions};
+use dsp206_link::{Event, Health, Link, LinkConfig, MockDevice, MockOptions, UsbDevice};
 use dsp206_proto::{Channel, Meters, Program, Request};
 use gtk::{gio, glib};
 
@@ -19,13 +20,39 @@ pub const APP_ID: &str = "org.meredsp206.Editor";
 /// (connection.md §2).
 pub const RECONNECT_DELAY: Duration = Duration::from_secs(60);
 const LOG_LINES: usize = 3000;
+/// How often the USB devices are listed again while offline.
+const USB_SCAN_INTERVAL: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LinkKind {
     Offline,
     Connecting,
+    /// A real unit over the network.
     Device,
+    /// A real unit over USB.
+    Usb,
     Demo,
+}
+
+impl LinkKind {
+    pub fn is_online(self) -> bool {
+        matches!(self, LinkKind::Device | LinkKind::Usb | LinkKind::Demo)
+    }
+}
+
+/// Where a link goes.
+enum Target {
+    Net(SocketAddr),
+    Usb(PathBuf),
+}
+
+impl std::fmt::Display for Target {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Target::Net(addr) => write!(f, "{addr}"),
+            Target::Usb(path) => write!(f, "USB ({})", path.display()),
+        }
+    }
 }
 
 pub struct App {
@@ -34,6 +61,9 @@ pub struct App {
     demo: RefCell<Option<MockDevice>>,
     pub kind: Cell<LinkKind>,
     pub address: RefCell<String>,
+    /// DSP units seen on USB at the last scan.
+    pub usb_devices: RefCell<Vec<UsbDevice>>,
+    last_usb_scan: Cell<Option<Instant>>,
     pub device_id: Cell<u8>,
     pub selected: Cell<Channel>,
     pub selected_band: Cell<usize>,
@@ -56,6 +86,7 @@ pub struct App {
 #[derive(Clone, Debug, Default)]
 pub struct Options {
     pub demo: bool,
+    pub usb: bool,
     pub connect: Option<String>,
     pub page: Option<String>,
     pub channel: Option<String>,
@@ -80,6 +111,7 @@ pub fn run(opts: Options) -> glib::ExitCode {
         });
         let tick = Rc::clone(&app);
         glib::timeout_add_local(Duration::from_millis(500), move || {
+            tick.watch_usb();
             tick.refresh_status();
             glib::ControlFlow::Continue
         });
@@ -93,6 +125,8 @@ pub fn run(opts: Options) -> glib::ExitCode {
         }
         if opts.demo {
             app.start_demo();
+        } else if opts.usb {
+            app.connect_usb();
         } else if let Some(ip) = &opts.connect {
             *app.address.borrow_mut() = ip.clone();
             app.connect_device();
@@ -111,6 +145,8 @@ impl App {
             demo: RefCell::new(None),
             kind: Cell::new(LinkKind::Offline),
             address: RefCell::new("192.168.1.101".into()),
+            usb_devices: RefCell::new(Vec::new()),
+            last_usb_scan: Cell::new(None),
             device_id: Cell::new(1),
             selected: Cell::new(Channel::IN_A),
             selected_band: Cell::new(0),
@@ -205,7 +241,43 @@ impl App {
                 "The unit may stay silent for about {s} s after the last session; connecting anyway"
             ));
         }
-        self.start_link(SocketAddr::new(ip, dsp206_link::PORT), LinkKind::Device);
+        self.start_link(
+            Target::Net(SocketAddr::new(ip, dsp206_link::PORT)),
+            LinkKind::Device,
+        );
+    }
+
+    /// List the units plugged in over USB (sysfs only, nothing is sent).
+    /// Returns true when the list changed.
+    pub fn scan_usb(&self) -> bool {
+        self.last_usb_scan.set(Some(Instant::now()));
+        let found = dsp206_link::find_usb_devices().unwrap_or_default();
+        let changed = *self.usb_devices.borrow() != found;
+        *self.usb_devices.borrow_mut() = found;
+        changed
+    }
+
+    /// Follow plugging and unplugging while offline.
+    fn watch_usb(&self) {
+        let due = self
+            .last_usb_scan
+            .get()
+            .is_none_or(|t| t.elapsed() >= USB_SCAN_INTERVAL);
+        if self.kind.get() == LinkKind::Offline && due && self.scan_usb() {
+            self.refresh();
+        }
+    }
+
+    pub fn connect_usb(self: &Rc<Self>) {
+        self.scan_usb();
+        let path = self.usb_devices.borrow().first().map(|d| d.path.clone());
+        match path {
+            Some(path) => self.start_link(Target::Usb(path), LinkKind::Usb),
+            None => {
+                self.toast("No DSP 206 found on USB");
+                self.refresh();
+            }
+        }
     }
 
     pub fn start_demo(self: &Rc<Self>) {
@@ -214,14 +286,14 @@ impl App {
             Ok(mock) => {
                 let addr = mock.addr();
                 *self.demo.borrow_mut() = Some(mock);
-                self.start_link(addr, LinkKind::Demo);
+                self.start_link(Target::Net(addr), LinkKind::Demo);
             }
             Err(e) => self.toast(&format!("Cannot start the simulated device: {e}")),
         }
     }
 
-    fn start_link(self: &Rc<Self>, addr: SocketAddr, kind: LinkKind) {
-        if kind == LinkKind::Device {
+    fn start_link(self: &Rc<Self>, target: Target, kind: LinkKind) {
+        if kind != LinkKind::Demo {
             self.disconnect();
         }
         self.kind.set(LinkKind::Connecting);
@@ -234,7 +306,11 @@ impl App {
             },
             ..LinkConfig::default()
         };
-        let handle = gio::spawn_blocking(move || Link::connect(addr, cfg));
+        let name = target.to_string();
+        let handle = gio::spawn_blocking(move || match &target {
+            Target::Net(addr) => Link::connect(*addr, cfg),
+            Target::Usb(path) => Link::open_usb(path, cfg),
+        });
         let app = Rc::clone(self);
         glib::spawn_future_local(async move {
             match handle.await {
@@ -246,11 +322,11 @@ impl App {
                     app.health.set(Health::Answering);
                     app.unconfirmed.set(0);
                     app.timeouts.set(0);
-                    app.toast(&format!("Connected to {addr}, reading the program…"));
+                    app.toast(&format!("Connected to {name}, reading the program…"));
                 }
                 Ok(Err(e)) => {
                     app.kind.set(LinkKind::Offline);
-                    app.toast(&format!("Cannot connect to {addr}: {e}"));
+                    app.toast(&format!("Cannot connect to {name}: {e}"));
                 }
                 Err(_) => app.kind.set(LinkKind::Offline),
             }

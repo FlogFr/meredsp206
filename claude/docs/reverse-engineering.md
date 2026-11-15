@@ -58,8 +58,9 @@ directory, never inside the extracted vendor files.
 See "Open questions" in [protocol.md](protocol.md#5-open-questions). Suggested
 order:
 
-1. Power-cycle the DSP and repeat a calm read session to settle the reply-loss
-   issue ([connection.md](connection.md)).
+1. Over USB the unit answers every request (protocol.md §1.2), so use USB for
+   the next live work. The network reply loss ([connection.md](connection.md))
+   stays unexplained.
 2. Capture one frame per setter by changing a single parameter on a scratch
    preset (user approval needed, see `claude/rules/device-safety.md`).
 3. Decode the store/recall/upload/download ACK state machine (`0x422bac` case

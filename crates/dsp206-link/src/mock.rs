@@ -22,6 +22,9 @@ pub struct MockOptions {
     pub reply_limit: Option<usize>,
     /// Do not acknowledge setters.
     pub silent_writes: bool,
+    /// Answer the first this-many frames with `0x02` (NAK) instead of handling
+    /// them, as the real unit does with a damaged frame.
+    pub nak_first: usize,
 }
 
 /// Everything the simulated device remembers.
@@ -36,6 +39,7 @@ pub struct MockState {
     /// Every request received, in order.
     pub received: Vec<Request>,
     pub replies_sent: usize,
+    pub naks_sent: usize,
 }
 
 impl Default for MockState {
@@ -49,6 +53,7 @@ impl Default for MockState {
             tone: (0, 0),
             received: Vec::new(),
             replies_sent: 0,
+            naks_sent: 0,
         }
     }
 }
@@ -148,15 +153,20 @@ fn client(mut stream: TcpStream, state: &Mutex<MockState>, stop: &AtomicBool, op
                     continue;
                 };
                 st.received.push(req.clone());
-                let limited = opts.reply_limit.is_some_and(|n| st.replies_sent >= n);
-                let reply = respond(&mut st, &req, frame.dst, started.elapsed(), opts);
-                if limited {
-                    None
+                if st.naks_sent < opts.nak_first {
+                    st.naks_sent += 1;
+                    reply(frame.dst, dsp206_proto::command::NAK, vec![])
                 } else {
-                    if reply.is_some() {
-                        st.replies_sent += 1;
+                    let limited = opts.reply_limit.is_some_and(|n| st.replies_sent >= n);
+                    let reply = respond(&mut st, &req, frame.dst, started.elapsed(), opts);
+                    if limited {
+                        None
+                    } else {
+                        if reply.is_some() {
+                            st.replies_sent += 1;
+                        }
+                        reply
                     }
-                    reply
                 }
             };
             if let Some(f) = reply {

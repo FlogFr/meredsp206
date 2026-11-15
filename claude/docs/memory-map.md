@@ -99,7 +99,7 @@ Per-band bypass flags are **not** in the record. They live in the global masks (
 | Offset | Type | Field | Tag |
 |---|---|---|---|
 | `0x380` | u16 | Input mute mask (bit 0 InA, bit 1 InB) | [code] |
-| `0x382` | u16 | Output mute mask (bit k = Out k+1) | [code] |
+| `0x382` | u16 | Output mute mask (bit k = Out k+1). Read back as `0x20` after muting Out6 with `0x35`, `0` after unmuting | [live][code] |
 | `0x384` | 2 × u16 | Input PEQ band-bypass masks (bit n = band n+1) | [code] |
 | `0x388` | 6 × u16 | Output PEQ band-bypass masks | [code] |
 | `0x394` | u16 | Unknown (read in many places; HPF/LPF bypass or lock?) | [guess] |
@@ -202,4 +202,6 @@ Useful as a test vector (`Default Preset`):
 - Out1 routing mask 1, mix gains 280/280.
 
 Raw pages 0–7, 10 and 15 of that dump are stored in
-`tools/re/captures/default-program-partial.json`.
+`tools/re/captures/default-program-partial.json`. A full read over USB
+(`tools/re/captures/usb-01-full-read.json`) has all 19 pages, and they equal
+`Program::factory_default()` byte for byte.

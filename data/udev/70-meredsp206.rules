@@ -1,0 +1,5 @@
+# t.racks DSP 206 over USB (shows up as "Musicrown Dsp Process", 0168:0821).
+# Lets the user logged in at the seat open its hidraw node without root.
+# Install: sudo install -m 644 70-meredsp206.rules /etc/udev/rules.d/
+#          sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=hidraw
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0168", ATTRS{idProduct}=="0821", MODE="0660", GROUP="plugdev", TAG+="uaccess"

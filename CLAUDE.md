@@ -1,16 +1,19 @@
 # CLAUDE.md
 
 **meredsp206**: a native Linux app (Rust + GTK 4/libadwaita) to control a
-t.racks DSP 206 loudspeaker processor over the LAN. It replaces the Windows-only
+t.racks DSP 206 loudspeaker processor over USB or the LAN. It replaces the Windows-only
 *the t.racks DSP 206 Processor Editor V1.05*, whose protocol was reverse engineered
 for this project.
 
 Status (2026-11-15): first full implementation, awaiting the user's tests on hardware.
-`dsp206-proto` (protocol, program, edits, files), `dsp206-link` (TCP session,
-discovery, simulated device), `dsp206` CLI and the `meredsp206` GTK app are written
-and tested against the simulated device. Setters were never sent to the real unit
-by Claude (device-safety.md). Open issue: the real unit stops answering ~1–2 s
-after connect (connection.md); docs for the new crates are not written yet.
+`dsp206-proto` (protocol, program, edits, files, USB HID framing), `dsp206-link`
+(TCP and USB HID sessions, UDP and USB discovery, simulated device), `dsp206` CLI
+and the `meredsp206` GTK app are written and tested against the simulated device.
+The USB link (reverse engineered from the editor, protocol.md §1.2) works on the
+real unit: CLI and GTK app read everything, meters run for 30 s without a miss,
+and an approved Out6 mute/unmute was acknowledged (connection.md §3.2). The udev
+rule is installed on the dev machine. Open issue: over the network the real unit
+stops answering ~1–2 s after connect (connection.md); USB does not have it.
 
 ## Working agreement (applies to every request)
 
@@ -64,9 +67,10 @@ after connect (connection.md); docs for the new crates are not written yet.
 | Path | Content |
 |---|---|
 | `crates/dsp206-proto/` | Protocol crate: `frame`, `command`, `program`, `edit`, `units` modules, plus `tests/` (captures, docs sync) |
-| `crates/dsp206-link/` | `Link` worker (one request in flight, retries, coalescing), UDP discovery, `MockDevice` |
+| `crates/dsp206-link/` | `Link` worker over TCP or USB HID (one request in flight, retries, coalescing), UDP and USB discovery, `MockDevice` |
 | `crates/dsp206-cli/` | `dsp206` command-line tool |
 | `crates/dsp206-gtk/` | `meredsp206` GTK 4 / libadwaita app (`model`, `format`, `response` are pure and tested) |
+| `data/udev/` | udev rule giving the logged-in user access to the USB unit (`/dev/hidrawN`) |
 | `tools/probe/` | Read-only device dump tool (`dsp206_dump.py`) |
 | `tools/re/` | Reverse-engineering scripts and `captures/` (real frames, used as test vectors) |
 | `tools/tests/` | Python tests for the tools and the docs |
@@ -77,13 +81,17 @@ after connect (connection.md); docs for the new crates are not written yet.
 ## Key facts (details in the docs)
 
 - TCP **9761**, one client at a time. Discovery on UDP **30303**.
+- USB: HID `0168:0821` ("Musicrown Dsp Process"), one frame per 64-byte report,
+  report ID 0. Input padding is **stale data**: always cut by the frame length.
+  Linux node `/dev/hidrawN`, root-only until `data/udev/70-meredsp206.rules` is
+  installed. USB is the reliable link: use it for live work.
 - Frame: `10 02 src dst len cmd data… 10 03 xor`, `len = 1 + len(data)`, no DLE
   stuffing, XOR over all previous bytes. PC address 0, device ID default 1.
 - Channels: 0 = InA, 1 = InB, 2–7 = Out1–Out6.
 - Program = 928 bytes, read as 19 pages of 50 bytes with `0x27 [p]` → `0x24`.
 - Keep one long-lived connection, one request in flight, 800 ms timeout.
-  The device currently goes silent about 1–2 s after connect. This is still
-  being investigated, see [claude/docs/connection.md](claude/docs/connection.md).
+  Over the network the device goes silent about 1–2 s after connect (not over
+  USB), see [claude/docs/connection.md](claude/docs/connection.md).
 
 ## Commands
 
@@ -97,8 +105,9 @@ make fmt
 make design         # re-render design/*.png from design/src/*.html
 ```
 
-Run the app: `cargo run -p dsp206-gtk -- --demo` (simulated unit) or `-- --connect 192.168.1.101`.
-CLI: `cargo run -p dsp206-cli -- help`. The workspace uses `resolver = "3"` so
+Run the app: `cargo run -p dsp206-gtk -- --demo` (simulated unit), `-- --usb` or
+`-- --connect 192.168.1.101`. CLI: `cargo run -p dsp206-cli -- help`
+(`--usb` / `--hidraw PATH` select USB; `discover` lists USB and LAN units). The workspace uses `resolver = "3"` so
 dependencies stay compatible with Rust 1.84.
 
 Read-only device dump (wait 60 s between runs):

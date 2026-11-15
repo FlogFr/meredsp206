@@ -24,6 +24,8 @@ pub struct DevicePage {
     pub root: adw::PreferencesPage,
     address: gtk::Entry,
     device_id: gtk::SpinButton,
+    usb: adw::ActionRow,
+    connect_usb: gtk::Button,
     connect: gtk::Button,
     demo: gtk::Button,
     disconnect: gtk::Button,
@@ -38,8 +40,17 @@ impl DevicePage {
 
         let conn = adw::PreferencesGroup::builder()
             .title("Connection")
-            .description("The DSP accepts one network client at a time. After a disconnection, wait about a minute before connecting again.")
+            .description("Over USB, or over the network. The DSP accepts one network client at a time; after a network disconnection, wait about a minute before connecting again.")
             .build();
+        let connect_usb = gtk::Button::with_label("Connect");
+        connect_usb.set_valign(gtk::Align::Center);
+        connect_usb.set_tooltip_text(Some("Connect to the unit plugged in over USB"));
+        let usb = row("USB", None, &connect_usb);
+        conn.add(&usb);
+        {
+            let app = Rc::clone(app);
+            connect_usb.connect_clicked(move |_| app.connect_usb());
+        }
         let address = gtk::Entry::builder()
             .text(app.address.borrow().as_str())
             .width_chars(16)
@@ -69,7 +80,9 @@ impl DevicePage {
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         buttons.set_valign(gtk::Align::Center);
         let scan = gtk::Button::with_label("Scan network");
+        scan.set_tooltip_text(Some("Find units on the network (UDP 30303)"));
         let connect = gtk::Button::with_label("Connect");
+        connect.set_tooltip_text(Some("Connect over the network to the IP address above"));
         connect.add_css_class("suggested-action");
         let demo = gtk::Button::with_label("Demo");
         demo.set_tooltip_text(Some("Use a simulated DSP 206"));
@@ -233,6 +246,8 @@ impl DevicePage {
             root,
             address,
             device_id,
+            usb,
+            connect_usb,
             connect,
             demo,
             disconnect,
@@ -245,7 +260,11 @@ impl DevicePage {
     pub fn refresh(&self, app: &App) {
         let m = app.model.borrow();
         let kind = app.kind.get();
-        let online = matches!(kind, LinkKind::Device | LinkKind::Demo);
+        let online = kind.is_online();
+        let usb = app.usb_devices.borrow();
+        self.usb.set_subtitle(&format::usb_devices(&usb));
+        self.connect_usb
+            .set_sensitive(kind == LinkKind::Offline && !usb.is_empty());
         self.connect.set_sensitive(kind == LinkKind::Offline);
         self.demo.set_sensitive(kind == LinkKind::Offline);
         self.disconnect.set_sensitive(online);
@@ -256,6 +275,7 @@ impl DevicePage {
             LinkKind::Offline => "offline",
             LinkKind::Connecting => "connecting",
             LinkKind::Device => "network",
+            LinkKind::Usb => "USB",
             LinkKind::Demo => "simulated device",
         });
         self.info[2].set_subtitle(

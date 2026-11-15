@@ -1,16 +1,20 @@
 //! The link worker thread: one request in flight, timeouts, retries,
 //! coalescing (protocol.md §3.2) and reply decoding.
+//!
+//! Requests that change the device (setters, presets) and the handshake go
+//! to a priority queue, so a click is never stuck behind a long program read.
 
 use std::collections::VecDeque;
-use std::io::{ErrorKind, Read, Write};
-use std::net::{Shutdown, TcpStream};
+use std::io::ErrorKind;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::Arc;
 use std::time::Instant;
 
+use dsp206_proto::command::NAK;
 use dsp206_proto::{FrameDecoder, ProgramAssembler, Reply, Request};
 
+use crate::transport::Transport;
 use crate::{program_read_sequence, read_all_sequence, Cmd, Event, Health, LinkConfig};
 
 struct Inflight {
@@ -21,12 +25,17 @@ struct Inflight {
 }
 
 struct Worker {
-    stream: TcpStream,
+    io: Box<dyn Transport>,
     cfg: LinkConfig,
     events: Sender<Event>,
     pending: Arc<AtomicUsize>,
-    queue: VecDeque<Request>,
+    /// Handshake, setters and preset operations, in order.
+    writes: VecDeque<Request>,
+    /// Everything else (reads), in order.
+    reads: VecDeque<Request>,
     inflight: Option<Inflight>,
+    /// No frame is sent before this instant (`LinkConfig::gap`).
+    ready_at: Instant,
     decoder: FrameDecoder,
     assembler: ProgramAssembler,
     reading_program: bool,
@@ -37,30 +46,38 @@ struct Worker {
 }
 
 pub(crate) fn run(
-    stream: TcpStream,
+    io: Box<dyn Transport>,
     cfg: LinkConfig,
     cmds: Receiver<Cmd>,
     events: Sender<Event>,
     pending: Arc<AtomicUsize>,
 ) {
+    let now = Instant::now();
     let mut w = Worker {
-        stream,
+        io,
         cfg,
         events,
         pending,
-        queue: VecDeque::new(),
+        writes: VecDeque::new(),
+        reads: VecDeque::new(),
         inflight: None,
+        ready_at: now,
         decoder: FrameDecoder::new(),
         assembler: ProgramAssembler::new(),
         reading_program: false,
         metering: false,
-        last_meter: Instant::now(),
+        last_meter: now,
         misses: 0,
         health: Health::Answering,
     };
     let reason = w.run(&cmds);
-    let _ = w.stream.shutdown(Shutdown::Both);
+    w.io.close();
     let _ = w.events.send(Event::Closed(reason));
+}
+
+/// Requests served before any queued read.
+fn is_priority(req: &Request) -> bool {
+    req.is_write() || matches!(req, Request::Connect)
 }
 
 impl Worker {
@@ -96,7 +113,7 @@ impl Worker {
                 return e;
             }
             self.pending.store(
-                self.queue.len() + usize::from(self.inflight.is_some()),
+                self.writes.len() + self.reads.len() + usize::from(self.inflight.is_some()),
                 Ordering::Relaxed,
             );
         }
@@ -121,19 +138,20 @@ impl Worker {
                 return;
             }
         }
+        let queue = if is_priority(&req) {
+            &mut self.writes
+        } else {
+            &mut self.reads
+        };
         if let Some(key) = req.coalesce_key() {
-            if let Some(slot) = self
-                .queue
-                .iter_mut()
-                .find(|q| q.coalesce_key() == Some(key))
-            {
+            if let Some(slot) = queue.iter_mut().find(|q| q.coalesce_key() == Some(key)) {
                 *slot = req;
                 return;
             }
-        } else if self.queue.contains(&req) {
+        } else if queue.contains(&req) {
             return;
         }
-        self.queue.push_back(req);
+        queue.push_back(req);
     }
 
     fn write(&mut self, bytes: &[u8]) -> Result<(), String> {
@@ -141,15 +159,13 @@ impl Worker {
             outgoing: true,
             bytes: bytes.to_vec(),
         });
-        self.stream
-            .write_all(bytes)
-            .map_err(|e| format!("send failed: {e}"))
+        self.io.send(bytes).map_err(|e| format!("send failed: {e}"))
     }
 
-    /// Read whatever the socket has and handle complete frames.
+    /// Read whatever the connection has and handle complete frames.
     fn pump(&mut self) -> Result<(), String> {
         let mut buf = [0u8; 1024];
-        match self.stream.read(&mut buf) {
+        match self.io.recv(&mut buf) {
             Ok(0) => return Err("the device closed the connection".into()),
             Ok(n) => self.decoder.push(&buf[..n]),
             Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
@@ -165,6 +181,13 @@ impl Worker {
                 continue;
             }
             self.answered();
+            if frame.cmd == NAK {
+                // The device got a damaged frame: send the request again.
+                if let Some(inf) = &mut self.inflight {
+                    inf.deadline = Instant::now();
+                }
+                continue;
+            }
             let reply = Reply::parse(&frame);
             let done = self
                 .inflight
@@ -177,6 +200,7 @@ impl Worker {
             self.handle_reply(reply);
             if done {
                 let req = self.inflight.take().map(|i| i.req);
+                self.ready_at = Instant::now() + self.cfg.gap;
                 self.after_request(req.as_ref());
             }
         }
@@ -225,7 +249,7 @@ impl Worker {
             return;
         }
         let more = self
-            .queue
+            .reads
             .iter()
             .any(|r| matches!(r, Request::ReadProgramPage(_)));
         if more {
@@ -238,34 +262,50 @@ impl Worker {
         }
     }
 
+    fn timeout_for(&self, req: &Request) -> std::time::Duration {
+        if req.is_write() {
+            self.cfg.write_timeout
+        } else {
+            self.cfg.read_timeout
+        }
+    }
+
     fn tick(&mut self) -> Result<(), String> {
         let now = Instant::now();
         if let Some(inf) = &mut self.inflight {
             if now < inf.deadline {
                 return Ok(());
             }
-            let is_read = inf.req.reply_code().is_some();
-            if is_read && inf.tries < self.cfg.read_retries && inf.req != Request::GetMeters {
+            let expects_reply = inf.req.reply_code().is_some();
+            if expects_reply && inf.tries < self.cfg.retries && inf.req != Request::GetMeters {
                 inf.tries += 1;
-                inf.deadline = now + self.cfg.read_timeout;
+                let req = inf.req.clone();
                 let bytes = inf.bytes.clone();
+                let timeout = self.timeout_for(&req);
+                if let Some(inf) = &mut self.inflight {
+                    inf.deadline = now + timeout;
+                }
                 return self.write(&bytes);
             }
             let Some(inf) = self.inflight.take() else {
                 return Ok(());
             };
-            self.missed();
+            self.ready_at = now + self.cfg.gap;
+            if expects_reply {
+                self.missed();
+            }
             match inf.req {
                 Request::GetMeters => {}
-                ref r if is_read => self.emit(Event::Timeout(r.clone())),
-                ref r if !matches!(r, Request::Disconnect | Request::EndOfTransfer) => {
-                    self.emit(Event::Unconfirmed(r.clone()))
-                }
+                ref r if r.is_write() => self.emit(Event::Unconfirmed(r.clone())),
+                ref r if expects_reply => self.emit(Event::Timeout(r.clone())),
                 _ => {}
             }
             self.after_request(Some(&inf.req));
         }
-        let next = match self.queue.pop_front() {
+        if now < self.ready_at {
+            return Ok(());
+        }
+        let next = match self.writes.pop_front().or_else(|| self.reads.pop_front()) {
             Some(r) => r,
             None if self.metering
                 && now.duration_since(self.last_meter) >= self.cfg.meter_interval =>
@@ -276,11 +316,7 @@ impl Worker {
             None => return Ok(()),
         };
         let bytes = frame_bytes(&next, self.cfg.device_id);
-        let timeout = if next.reply_code().is_some() {
-            self.cfg.read_timeout
-        } else {
-            self.cfg.write_timeout
-        };
+        let timeout = self.timeout_for(&next);
         self.write(&bytes)?;
         self.inflight = Some(Inflight {
             req: next,

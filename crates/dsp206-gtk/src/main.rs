@@ -6,7 +6,7 @@ mod model;
 mod response;
 mod ui;
 
-const USAGE: &str = "usage: meredsp206 [--demo | --connect IP] [--page mixer|channel|device|log] [--channel ina|inb|out1..out6]";
+const USAGE: &str = "usage: meredsp206 [--demo | --usb | --connect IP] [--page mixer|channel|device|log] [--channel ina|inb|out1..out6]";
 
 fn main() -> gtk::glib::ExitCode {
     let mut opts = app::Options::default();
@@ -14,6 +14,7 @@ fn main() -> gtk::glib::ExitCode {
     while let Some(a) = args.next() {
         match a.as_str() {
             "--demo" => opts.demo = true,
+            "--usb" => opts.usb = true,
             "--connect" => opts.connect = args.next(),
             "--page" => opts.page = args.next(),
             "--channel" => opts.channel = args.next(),

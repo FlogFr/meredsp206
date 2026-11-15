@@ -1,5 +1,6 @@
 //! Display and parsing of raw device values (memory-map.md §4).
 
+use dsp206_link::UsbDevice;
 use dsp206_proto::units;
 
 pub fn hz(f: f64) -> String {
@@ -67,6 +68,19 @@ pub fn delay(raw: u16, unit: u16) -> String {
 
 /// Parse a number with an optional unit suffix and `k` multiplier
 /// ("1k", "1.5 kHz", "-3 dB", "+2,5").
+/// Subtitle of the USB row on the device page.
+pub fn usb_devices(found: &[UsbDevice]) -> String {
+    match found {
+        [] => "No unit plugged in".into(),
+        [d] => format!("{} on {}", d.name, d.path.display()),
+        [d, ..] => format!(
+            "{} units plugged in, using {}",
+            found.len(),
+            d.path.display()
+        ),
+    }
+}
+
 pub fn parse_number(text: &str) -> Option<f64> {
     let t = text
         .trim()
@@ -106,6 +120,24 @@ mod tests {
         assert_eq!(ratio(15), "∞:1");
         assert_eq!(delay(96, 0), "1.00 ms");
         assert_eq!(delay(960, 1), "3.435 m");
+    }
+
+    #[test]
+    fn describes_usb_devices() {
+        let dev = |n: u8| UsbDevice {
+            path: format!("/dev/hidraw{n}").into(),
+            name: "Musicrown Dsp Process".into(),
+            phys: String::new(),
+        };
+        assert_eq!(usb_devices(&[]), "No unit plugged in");
+        assert_eq!(
+            usb_devices(&[dev(5)]),
+            "Musicrown Dsp Process on /dev/hidraw5"
+        );
+        assert_eq!(
+            usb_devices(&[dev(5), dev(6)]),
+            "2 units plugged in, using /dev/hidraw5"
+        );
     }
 
     #[test]

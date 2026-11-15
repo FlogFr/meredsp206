@@ -1,16 +1,17 @@
 //! Argument parsing (no dependency).
 
 use std::net::IpAddr;
+use std::path::PathBuf;
 
 use dsp206_proto::program::name_field;
 use dsp206_proto::units::{delay_raw, gain_raw};
 use dsp206_proto::{Channel, Request, ToneSource};
 
 pub const USAGE: &str = "\
-usage: dsp206 [--host IP] [--port N] [--id N] [--trace] [-v] COMMAND
+usage: dsp206 [--host IP] [--port N] [--usb] [--hidraw PATH] [--id N] [--trace] [-v] COMMAND
 
 Commands:
-  discover                 find DSP 206 units on the LAN (UDP 30303)
+  discover                 find DSP 206 units on USB and on the LAN (UDP 30303)
   info                     read identity, presets and the current program
   dump [FILE]              read the current program and save it as a .dsp206 file
   meters [COUNT]           print level meters (default 20 readings)
@@ -27,7 +28,9 @@ Commands:
   help
 
 CH is ina, inb, out1..out6 (or 0..7). Defaults: --host 192.168.1.101 --port 9761 --id 1.
-Wait about one minute between two connections to a real unit.";
+--usb talks to the unit plugged in over USB instead (--hidraw picks the node,
+e.g. /dev/hidraw5). Over the network, wait about one minute between two
+connections to a real unit.";
 
 #[derive(Debug, PartialEq)]
 pub enum Command {
@@ -45,6 +48,10 @@ pub enum Command {
 pub struct Cli {
     pub host: IpAddr,
     pub port: u16,
+    /// Use USB instead of the network.
+    pub usb: bool,
+    /// USB node to open; found automatically when `None`.
+    pub hidraw: Option<PathBuf>,
     pub id: u8,
     pub trace: bool,
     pub verbose: bool,
@@ -150,6 +157,8 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
     let mut cli = Cli {
         host: [192, 168, 1, 101].into(),
         port: dsp206_link::PORT,
+        usb: false,
+        hidraw: None,
         id: 1,
         trace: false,
         verbose: false,
@@ -171,6 +180,11 @@ pub fn parse(argv: &[String]) -> Result<Cli, String> {
                 host_given = true;
             }
             "--port" => cli.port = number(&value()?, "port")?,
+            "--usb" => cli.usb = true,
+            "--hidraw" => {
+                cli.hidraw = Some(value()?.into());
+                cli.usb = true;
+            }
             "--id" => cli.id = number(&value()?, "device id")?,
             "--trace" => cli.trace = true,
             "-v" | "--verbose" => cli.verbose = true,
@@ -230,12 +244,25 @@ mod tests {
             Command::Meters(5)
         );
         assert_eq!(parse(&[]).unwrap().command, Command::Help);
+        assert!(!parse(&args("info")).unwrap().usb);
         assert!(parse(&args("frobnicate")).is_err());
         // mock listens on localhost unless told otherwise
         assert_eq!(
             parse(&args("mock")).unwrap().host,
             IpAddr::from([127, 0, 0, 1])
         );
+    }
+
+    #[test]
+    fn usb_options() {
+        let cli = parse(&args("--usb info")).unwrap();
+        assert!(cli.usb);
+        assert_eq!((cli.hidraw, cli.command), (None, Command::Info));
+        let cli = parse(&args("--hidraw /dev/hidraw5 meters 3")).unwrap();
+        assert!(cli.usb);
+        assert_eq!(cli.hidraw, Some(PathBuf::from("/dev/hidraw5")));
+        assert_eq!(cli.command, Command::Meters(3));
+        assert!(parse(&args("--hidraw")).is_err());
     }
 
     #[test]

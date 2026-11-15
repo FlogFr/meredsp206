@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use args::{parse, Cli, Command};
-use dsp206_link::{discover, Event, Link, LinkConfig, MockDevice, MockOptions};
+use dsp206_link::{discover, find_usb_devices, Event, Link, LinkConfig, MockDevice, MockOptions};
 use dsp206_proto::units::{delay_ms, gain_db};
 use dsp206_proto::{Channel, Program, Request};
 
@@ -29,11 +29,25 @@ fn main() -> ExitCode {
 }
 
 fn connect(cli: &Cli) -> Result<Link, String> {
-    let addr = SocketAddr::new(cli.host, cli.port);
     let cfg = LinkConfig {
         device_id: cli.id,
         ..LinkConfig::default()
     };
+    if cli.usb {
+        let path = match &cli.hidraw {
+            Some(p) => p.clone(),
+            None => {
+                find_usb_devices()
+                    .map_err(|e| format!("cannot list USB devices: {e}"))?
+                    .into_iter()
+                    .next()
+                    .ok_or("no DSP 206 found on USB")?
+                    .path
+            }
+        };
+        return Link::open_usb(&path, cfg).map_err(|e| format!("cannot open USB: {e}"));
+    }
+    let addr = SocketAddr::new(cli.host, cli.port);
     Link::connect(addr, cfg).map_err(|e| format!("cannot connect to {addr}: {e}"))
 }
 
@@ -89,10 +103,19 @@ fn run(cli: Cli) -> Result<(), String> {
     match &cli.command {
         Command::Help => println!("{}", args::USAGE),
         Command::Discover => {
+            match find_usb_devices() {
+                Ok(list) if list.is_empty() => println!("No DSP 206 on USB."),
+                Ok(list) => {
+                    for d in list {
+                        println!("{}  {}  {}", d.path.display(), d.name, d.phys);
+                    }
+                }
+                Err(e) => println!("Cannot list USB devices: {e}"),
+            }
             let extra: Vec<IpAddr> = vec![cli.host];
             let found = discover(Duration::from_secs(2), &extra).map_err(|e| e.to_string())?;
             if found.is_empty() {
-                println!("No device answered.");
+                println!("No device answered on the network.");
             }
             for d in found {
                 println!("{}  {}  {}", d.addr, d.name, d.details.join(" "));

@@ -1,19 +1,20 @@
 # meredsp206
 
 A native Linux editor for the **t.racks DSP 206** loudspeaker processor (2 in /
-6 out), controlled over the local network. It aims to cover every feature of the
-Windows-only *the t.racks DSP 206 Processor Editor V1.05*, with a cleaner,
-faster interface.
+6 out), controlled over USB or the local network. It aims to cover every feature
+of the Windows-only *the t.racks DSP 206 Processor Editor V1.05*, with a
+cleaner, faster interface.
 
 > **Project status: early.** The device protocol has been reverse engineered and
 > documented ([claude/docs/protocol.md](claude/docs/protocol.md)). The protocol
-> library (`crates/dsp206-proto`) is implemented and tested. The application
-> itself is **not written yet**. The sections below marked *(planned)* describe
-> the target.
+> library, the link (USB and network), the `dsp206` command-line tool and the
+> `meredsp206` GUI are written and tested against a simulated unit, but not yet
+> fully checked on real hardware. The sections below marked *(planned)*
+> describe the target.
 
 ## Features (planned)
 
-- Find DSP 206 units on the LAN automatically, or connect by IP.
+- Connect over USB, find DSP 206 units on the LAN automatically, or connect by IP.
 - Mixer view: all 8 channels at a glance with level meters, gain, mute, polarity
   and names.
 - Per input: gain, mute, polarity, delay, noise gate, 31-band graphic EQ,
@@ -34,10 +35,27 @@ The target look is in [`design/`](design/):
 ## Requirements
 
 - Debian 13 (trixie) or newer, or another recent Linux distribution with GTK 4.
-- A t.racks DSP 206 reachable on your network. Factory IP: `192.168.1.101`, TCP
-  port `9761`.
+- A t.racks DSP 206, plugged into a USB port or reachable on your network
+  (factory IP `192.168.1.101`, TCP port `9761`).
 
-## Build from source (planned)
+## USB access
+
+Over USB the unit appears as a HID device named *Musicrown Dsp Process*
+(`0168:0821`), for example `/dev/hidraw5`. Linux gives that node to root
+only. Install the udev rule once so your user can open it:
+
+```bash
+sudo install -m 644 data/udev/70-meredsp206.rules /etc/udev/rules.d/
+sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=hidraw
+```
+
+`dsp206 discover` lists the units it finds on USB and on the network.
+
+USB is the recommended link: on our unit every request is answered within
+about 20 ms, while the network link loses replies after a second or two (see
+[connection behaviour](claude/docs/connection.md)).
+
+## Build from source
 
 Install the build dependencies:
 
@@ -63,17 +81,30 @@ sudo make install PREFIX=/usr/local
 This installs both binaries, a desktop entry and an icon. Remove them with
 `sudo make uninstall PREFIX=/usr/local`.
 
-## Usage (planned)
+## Usage
 
-1. Connect the DSP 206 to the same network as your computer.
-2. Start **meredsp206** from your application menu. The unit appears in the device
-   list. Otherwise enter its IP address.
+1. Plug the DSP 206 into a USB port (see *USB access*), or connect it to the
+   same network as your computer.
+2. Start the GUI with `cargo run -p dsp206-gtk` (add `-- --usb` to connect over
+   USB at once, or `-- --connect IP`). On the *Device* page, use *Connect* on
+   the USB row, or enter the IP address and use *Connect* below it.
 3. The current program is read from the device. Every change you make is sent
    immediately.
 
+The command-line tool does the same from a terminal:
+
+```bash
+cargo run -p dsp206-cli -- --usb info          # identity, presets, current program
+cargo run -p dsp206-cli -- --usb meters 10     # ten level-meter readings
+cargo run -p dsp206-cli -- --host 192.168.1.101 info
+```
+
+`--hidraw /dev/hidrawN` picks a USB node when several are plugged in. Run
+`cargo run -p dsp206-cli -- help` for every command.
+
 Good to know: the DSP accepts only one network connection at a time. Close the
-Windows editor or any other client first. After a disconnection, wait about one
-minute before reconnecting.
+Windows editor or any other client first. After a network disconnection, wait
+about one minute before reconnecting.
 
 ## Development
 
@@ -91,7 +122,7 @@ for the tools and the documentation. Other targets: `make test`, `make lint`,
 ## Documentation
 
 - [Product overview and feature inventory](claude/docs/overview.md)
-- [Network protocol](claude/docs/protocol.md)
+- [Protocol (USB and network)](claude/docs/protocol.md)
 - [Program memory map and value encodings](claude/docs/memory-map.md)
 - [Connection behaviour](claude/docs/connection.md)
 - [Planned architecture](claude/docs/architecture.md)

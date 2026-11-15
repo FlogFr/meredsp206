@@ -161,6 +161,12 @@ pub enum ToneSource {
     Sine = 3,
 }
 
+/// Reply to setters and preset operations (protocol.md §3.3).
+pub const ACK: u8 = 0x01;
+/// Reply to a frame the device could not take, probably a damaged one
+/// (protocol.md §3.3).
+pub const NAK: u8 = 0x02;
+
 /// Command codes that only read device state (claude/rules/device-safety.md).
 pub const READ_ONLY_CODES: [u8; 9] = [0x10, 0x11, 0x13, 0x14, 0x22, 0x27, 0x29, 0x2C, 0x40];
 
@@ -424,14 +430,22 @@ impl Request {
     }
 
     /// Command byte of the reply that completes this request, when known.
+    /// Setters and preset operations are acknowledged with [`ACK`]
+    /// (seen on the unit for `0x35`, protocol.md §3.3).
     pub fn reply_code(&self) -> Option<u8> {
         use Request::*;
         match self {
             ReadProgramPage(_) => Some(0x24),
             Connect | Identify | GetCurrentPreset | GetLockState | GetMeters | GetPresetSlots
             | GetPresetName(_) => Some(self.code()),
-            _ => None,
+            Disconnect | EndOfTransfer => None,
+            _ => Some(ACK),
         }
+    }
+
+    /// True for requests that change the device (answered by [`ACK`]).
+    pub fn is_write(&self) -> bool {
+        self.reply_code() == Some(ACK)
     }
 
     /// Queued setters with the same key replace each other (protocol.md §3.2).
@@ -777,6 +791,15 @@ mod tests {
     }
 
     #[test]
+    fn every_request_fits_in_one_usb_report() {
+        // The editor sends one frame per 64-byte HID report (protocol.md §1.2).
+        for (req, _) in examples() {
+            let bytes = req.frame(1).encode().unwrap();
+            assert!(crate::hid::output_report(&bytes).is_ok(), "{req:?}");
+        }
+    }
+
+    #[test]
     fn frames_are_well_formed() {
         for (req, _) in examples() {
             let bytes = req.frame(1).encode().unwrap();
@@ -832,7 +855,18 @@ mod tests {
     fn reply_codes() {
         assert_eq!(Request::ReadProgramPage(0).reply_code(), Some(0x24));
         assert_eq!(Request::Identify.reply_code(), Some(0x13));
-        assert_eq!(Request::SetGain { ch: ch(0), raw: 0 }.reply_code(), None);
+        assert_eq!(
+            Request::SetGain { ch: ch(0), raw: 0 }.reply_code(),
+            Some(ACK)
+        );
+        assert_eq!(Request::Disconnect.reply_code(), None);
+        assert_eq!(Request::EndOfTransfer.reply_code(), None);
+        // Every request that is not read-only, except the session frames,
+        // waits for an ACK; no read-only request does.
+        for (req, _) in examples() {
+            let session = matches!(req, Request::Disconnect | Request::EndOfTransfer);
+            assert_eq!(req.is_write(), !req.is_read_only() && !session, "{req:?}");
+        }
     }
 
     #[test]

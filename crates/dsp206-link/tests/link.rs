@@ -224,3 +224,91 @@ fn close_sends_disconnect() {
     std::thread::sleep(Duration::from_millis(100));
     assert_eq!(mock.state().received.last(), Some(&Request::Disconnect));
 }
+
+#[test]
+fn setters_go_before_queued_reads() {
+    let mock = MockDevice::start(MockOptions::default()).unwrap();
+    let link = Link::connect(mock.addr(), fast()).unwrap();
+    let out6 = Channel::output(6).unwrap();
+    link.read_all();
+    link.send(Request::SetMute { ch: out6, on: true });
+    collect(&link, Duration::from_secs(5), |e| {
+        matches!(e, Event::PresetSlots(_))
+    });
+    let st = mock.state();
+    // The handshake first, then the click, then the long read.
+    assert_eq!(st.received[0], Request::Connect);
+    assert_eq!(st.received[1], Request::SetMute { ch: out6, on: true });
+    assert!(st.program.is_muted(out6));
+}
+
+#[test]
+fn nak_makes_the_link_send_again() {
+    let mock = MockDevice::start(MockOptions {
+        nak_first: 1,
+        ..MockOptions::default()
+    })
+    .unwrap();
+    let link = Link::connect(mock.addr(), fast()).unwrap();
+    let req = Request::SetMute {
+        ch: Channel::IN_A,
+        on: true,
+    };
+    link.send(req.clone());
+    wait_idle(&link);
+    let st = mock.state();
+    assert_eq!(st.received, vec![req.clone(), req]);
+    assert!(st.program.is_muted(Channel::IN_A));
+    drop(st);
+    let events = collect(&link, Duration::from_millis(100), |_| false);
+    assert!(!events.iter().any(|e| matches!(e, Event::Unconfirmed(_))));
+}
+
+#[test]
+fn unacknowledged_setter_is_sent_again_then_reported() {
+    let mock = MockDevice::start(MockOptions {
+        silent_writes: true,
+        ..MockOptions::default()
+    })
+    .unwrap();
+    let link = Link::connect(mock.addr(), fast()).unwrap();
+    let req = Request::SetGain {
+        ch: Channel::IN_B,
+        raw: 100,
+    };
+    link.send(req.clone());
+    let events = collect(&link, Duration::from_secs(3), |e| {
+        matches!(e, Event::Unconfirmed(_))
+    });
+    assert_eq!(events.last(), Some(&Event::Unconfirmed(req.clone())));
+    let sent = mock.state().received.iter().filter(|r| **r == req).count();
+    assert_eq!(sent, 1 + usize::from(fast().retries));
+}
+
+#[test]
+fn gap_spaces_out_frames() {
+    let mock = MockDevice::start(MockOptions::default()).unwrap();
+    let cfg = LinkConfig {
+        gap: Duration::from_millis(100),
+        ..fast()
+    };
+    let link = Link::connect(mock.addr(), cfg).unwrap();
+    link.send(Request::Identify);
+    link.send(Request::GetCurrentPreset);
+    link.send(Request::GetLockState);
+    link.send(Request::GetPresetSlots);
+    let mut sent = Vec::new();
+    let end = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < end {
+        match link.recv_timeout(Duration::from_millis(10)) {
+            Some(Event::Trace { outgoing: true, .. }) => sent.push(Instant::now()),
+            Some(Event::PresetSlots(_)) => break,
+            _ => {}
+        }
+    }
+    assert_eq!(sent.len(), 4);
+    for pair in sent.windows(2) {
+        let d = pair[1] - pair[0];
+        assert!(d >= Duration::from_millis(95), "frames only {d:?} apart");
+    }
+}

@@ -45,4 +45,5 @@ venv/bin/python -I tools/re/emu_parse.py dsp206.exe 419d8b 41aaab 3c6 2 950
 ## Captures
 
 `captures/*.json` holds frames exchanged with a real unit (hex strings). They
-serve as test vectors for `dsp206-proto`.
+serve as test vectors for `dsp206-proto`. `link-*` are network sessions,
+`usb-*` USB sessions; `usb-03` also keeps each raw 64-byte input report.

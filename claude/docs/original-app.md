@@ -50,6 +50,9 @@ Channel Name · Help (RS232 Code Table) · About.
   dispatched by `0x422bac`, a switch on the command byte.
 - `TClientSocket` gets port 9761 and default IP octets `192.168.1.101` in
   `FormCreate` (`0x431b0f`).
+- The main form keeps one pointer per link: COM at `+0x2254`, USB at
+  `+0x2250`, NET at `+0x225c`. The HID device chosen at enumeration is at
+  `+0x224c`. `0x422910` sends through whichever link is set.
 
 ## 5. Function address map (for further reverse engineering)
 
@@ -58,6 +61,12 @@ Channel Name · Help (RS232 Code Table) · About.
 | `0x412d34` | Build frame (DLE/STX, XOR) |
 | `0x422910` | Send message via the active link (COM/USB/NET) |
 | `0x422070` | NET write (`ClientSocket->SendBuf`) |
+| `0x4216ac` | USB write: report ID 0 + frame, `OutputReportByteLength` bytes |
+| `0x4224cc` | `HidCtlDeviceData`: cuts `report[4] + 8` bytes and feeds the USB link |
+| `0x42284c` | `HidCtlEnumerate`: matches VID `0x168` / PID `0x821` |
+| `0x423c64` | USB connect: creates the USB link and sends `0x10` |
+| `0x41cd98` | USB link thread (send, 800 ms timeout, retries) |
+| `0x41d824` | USB link enqueue (coalescing) |
 | `0x45ce78` | `ClientSocketRead` |
 | `0x422bac` | Reply dispatcher |
 | `0x419cd8` | Parse 19 program pages into the program struct |

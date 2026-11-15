@@ -13,14 +13,14 @@ Confidence tags used below:
 
 ## 1. Transports
 
-The editor supports three links. All of them carry the same frames (section 2),
-except USB HID which uses raw 64-byte reports.
+The editor supports three links. All of them carry the same frames (section 2).
+Over USB HID, each frame travels in its own 64-byte report (section 1.2).
 
 | Link | Details |
 |---|---|
-| Ethernet (LAN) | TCP client to port **9761** [live][code]. This is the link the Linux app targets. |
+| Ethernet (LAN) | TCP client to port **9761** [live][code]. Supported by the Linux app. |
 | RS-232 / USB-serial | 115200 baud, 8 data bits, no parity, 1 stop bit [code]. Same frames. |
-| USB HID | 64-byte reports through `TJvHidDeviceController` [code]. Not documented further. |
+| USB HID | VID `0x0168` / PID `0x0821`, 64-byte reports [live][code]. Supported by the Linux app (section 1.2). |
 
 ### 1.1 Ethernet module
 
@@ -45,6 +45,58 @@ The LAN port is an Ethernet-to-UART bridge built on the Microchip TCP/IP stack
   for roughly **45–90 s** [live]. Keep **one long-lived connection** and never
   reconnect in a loop. See [connection.md](connection.md).
 - The module advertises a 256-byte TCP receive window [live].
+
+### 1.2 USB HID
+
+The unit's USB port is a full-speed HID device [live]:
+
+- `idVendor 0x0168` ("Musicrown"), `idProduct 0x0821` ("Dsp Process"), no
+  serial number, bus powered, 100 mA.
+- One interface, class HID, no subclass or protocol. Interrupt endpoints
+  `0x81` IN and `0x02` OUT, 64 bytes, 1 ms interval.
+- The 27-byte report descriptor declares one vendor collection (usage page 1,
+  usage 0) with a 64-byte input report and a 64-byte output report, 8-bit
+  fields, **no report ID**.
+- Linux binds `hid-generic`, which creates `/dev/hidrawN`. Its `device/uevent`
+  holds `HID_ID=0003:00000168:00000821` and `HID_NAME=Musicrown Dsp Process`.
+  The node is root-only by default; `data/udev/70-meredsp206.rules` opens it to
+  the logged-in user.
+
+How the editor uses it [code]:
+
+- `HidCtlEnumerate` (`0x42284c`) picks the HID device whose vendor and product
+  IDs are `0x168` and `0x821`, then logs `Detect HID`.
+- **Output.** `0x4216ac` copies the frame to a buffer after a leading report ID
+  `0`, and writes `OutputReportByteLength` bytes (65: the ID and the 64-byte
+  report). The rest of the buffer is left as is, so the padding carries no
+  meaning. The Linux app pads with zeros, which the unit accepts [live].
+  `hidraw` takes the same 65 bytes.
+- **Input.** `HidCtlDeviceData` (`0x4224cc`) receives the 64-byte report
+  without its ID. It copies `report[4] + 8` bytes, the frame at the start of
+  the report, and feeds them to the link's frame parser. The rest of the report
+  is ignored. A frame is never split across reports, so every frame must fit in
+  64 bytes. All of them do: the longest, a program page reply, takes 60.
+- The USB link has its own thread (`0x41cd98`) with the same one-slot queue,
+  coalescing and retries as the other links. Its reply timeout starts at
+  800 ms (`+0x148 = 0x320`). Before sending `0x10`, the USB connect routine
+  (`0x423c64`) calls the link setters with 100 and 3, which look like a 100 ms
+  timeout and 3 retries [guess]. The rest of the session (section 3) is the
+  same as over the network.
+
+What the unit does over USB [live] (captures `usb-01` to `usb-03`, 2026-11-15):
+
+- Every request got its reply, in 2–21 ms (usually 6–11 ms). A full read
+  (handshake, 19 pages, 21 preset names, lock state, slot table) took 0.55 s.
+  `0x40` polled every 300 ms for 30 s got 100 replies out of 100. None of the
+  network silences ([connection.md](connection.md)) happened.
+- **The padding of input reports is stale.** After a short reply, the rest of
+  the report still holds bytes of the earlier, longer frames the unit sent,
+  even from a previous session, `10 03` trailers included. Bytes 60–63, past
+  every frame, read `00 49 b4 53`. So a receiver **must** cut each report by
+  the frame length, as the editor does, and must not feed whole reports to a
+  stream parser.
+- Setters work: `0x35` (mute Out6 on, then off) were acknowledged with `0x01`
+  in 11–14 ms, and page 17 read `0x382` = `0x0020`, then `0`.
 
 ## 2. Frame format
 
@@ -112,12 +164,24 @@ only after the matching reply arrives or a timeout expires [code].
   has the same command byte as the newest queued one, it **replaces** it. This keeps
   fast fader moves from flooding the device. The Linux app should do the same:
   coalesce by `(cmd, channel[, band])`.
+- Any complete frame from the device ends the request in flight, whatever its
+  command (`0x40ce7c`, called from the frame parser `0x40d040`).
+- **Idle keepalive.** The NET link restarts a 2000 ms timer (`+0x200`, handler
+  `0x40c428`) on every send. When it fires with nothing queued or in flight, the
+  app sends `0x12` and sets the reply timeout to 5000 ms. The timeout stays at
+  5000 ms afterwards (nothing sets it back) [code].
+- After the `0x10` reply, the app sends `0x13` with a 5000 ms timeout and 1 retry.
+  After a valid identity it sets 1000 ms and continues with `0x2c` (`0x4244ec`,
+  `0x4245c8`) [code].
+- **Short reads.** When a socket read returns 5 bytes or fewer, `ClientSocketRead`
+  (`0x45ce78`) re-sends the last frame at once and logs `NET RW` [code]. We never
+  received such short chunks in our captures [live].
 
 ### 3.3 Generic replies [code]
 
 | Reply `cmd` | Meaning |
 |---|---|
-| `0x01` | ACK. Drives the multi-step store/recall/upload state machines. |
+| `0x01` | ACK, no payload. Answers setters: `0x35` (mute) got `10 02 01 00 01 01 10 03 00` after 50–66 ms [live]. Also drives the multi-step store/recall/upload state machines [code]. |
 | `0x02` | Seen once after a request the device was not ready for [live]. Probably NAK/busy [guess]. |
 
 ## 4. Command reference
@@ -133,7 +197,7 @@ The device mirrors those fields in its current program.
 |---|---|---|---|---|
 | `0x10` | Connect | — | `0x10 [status]` (observed `0x19`) | [live] |
 | `0x11` | Disconnect | — | none | [live] |
-| `0x12` | End of bulk read / refresh | — | ACK? | [code] |
+| `0x12` | End of bulk read; idle keepalive (section 3.2) | — | ACK `0x01` (over USB) | [live][code] |
 | `0x13` | Identify | — | `0x13` ASCII, e.g. `DSP206 V0105P` | [live] |
 | `0x14` | Get current preset number | — | `0x14 [n]` | [live] |
 | `0x2c` | Get lock / PTS state | — | `0x2c [6 bytes]`, observed `00 27 0f 00 00 00`; byte 0 ≠ 0 means locked | [live][guess] |
@@ -170,7 +234,7 @@ Values use the encodings of [memory-map.md §4](memory-map.md#4-value-encodings)
 | Cmd | Parameter | Request data | Tag |
 |---|---|---|---|
 | `0x34` | Channel gain | `[ch, gain u16]` | [code] |
-| `0x35` | Mute | `[ch, 0/1]` | [code] |
+| `0x35` | Mute. The app sends one frame for `ch` and sets the local mute bit of every channel linked to it (`0x4160fc`, frame built by `0x416244`). Out6 mute on/off checked on the unit (front LED and `0x382`) | `[ch, 0/1]` | [live][code] |
 | `0x36` | Polarity (phase invert) | `[ch, 0/1]` | [code] |
 | `0x38` | Delay | `[ch, samples u16]` | [code] |
 | `0x15` | Delay display unit (0 = ms, 1 = m, 2 = ft) | `[unit]` | [code][guess] |
@@ -238,8 +302,8 @@ Payload: 38 bytes = 10 groups of 3 bytes, then 8 status bytes.
 
 ## 5. Open questions
 
-- Why the DSP stops answering after a burst or a reconnect (see
-  [connection.md](connection.md)). A power cycle of the DSP should be the next test.
+- Why the DSP stops answering after a burst or a reconnect over the network (see
+  [connection.md](connection.md)). It does not happen over USB (section 1.2).
 - Exact meaning of the `0x10` reply byte, the `0x2c` payload and the `0x22` table.
 - HPF/LPF bypass encoding. Global words `0x394` and `0x396` (see the memory map).
 - Write-path commands (`0x1a`, `0x25`, `0x19`, `0x28`, `0x23`, `0x04`) and the

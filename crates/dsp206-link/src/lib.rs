@@ -1,15 +1,18 @@
-//! Talking to a DSP 206 over TCP (claude/docs/connection.md).
+//! Talking to a DSP 206 over TCP or USB (claude/docs/connection.md).
 //!
-//! A [`Link`] owns the single TCP connection and a worker thread that keeps
+//! A [`Link`] owns the single connection and a worker thread that keeps
 //! exactly one request in flight, applies timeouts and retries, coalesces
 //! queued setters and turns replies into [`Event`]s. No async runtime.
 
 pub mod discovery;
 pub mod mock;
+mod transport;
+pub mod usb;
 mod worker;
 
 use std::io;
 use std::net::{SocketAddr, TcpStream};
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
@@ -20,6 +23,9 @@ use dsp206_proto::{Meters, Program, Request};
 
 pub use discovery::{discover, Discovered};
 pub use mock::{MockDevice, MockOptions, MockState};
+pub use usb::{find_devices as find_usb_devices, UsbDevice};
+
+use transport::Transport;
 
 /// TCP port of the Ethernet module (Microchip UART-to-TCP bridge).
 pub const PORT: u16 = 9761;
@@ -30,9 +36,12 @@ pub struct LinkConfig {
     pub connect_timeout: Duration,
     /// Reply timeout for reads (original app: 800 ms).
     pub read_timeout: Duration,
-    pub read_retries: u8,
-    /// How long to wait for an acknowledgement of a setter before moving on.
+    /// How long to wait for the `0x01` acknowledgement of a setter.
     pub write_timeout: Duration,
+    /// How many times an unanswered request is sent again (original app: 2).
+    pub retries: u8,
+    /// Quiet time after each reply or abandoned request before the next frame.
+    pub gap: Duration,
     /// Level-meter poll period when metering is on (original app: 300 ms).
     pub meter_interval: Duration,
     /// Consecutive unanswered requests before the link is reported silent.
@@ -45,8 +54,9 @@ impl Default for LinkConfig {
             device_id: dsp206_proto::frame::DEFAULT_DEVICE_ID,
             connect_timeout: Duration::from_secs(3),
             read_timeout: Duration::from_millis(800),
-            read_retries: 2,
-            write_timeout: Duration::from_millis(300),
+            write_timeout: Duration::from_millis(500),
+            retries: 2,
+            gap: Duration::ZERO,
             meter_interval: Duration::from_millis(300),
             silent_after: 3,
         }
@@ -136,17 +146,28 @@ pub struct Link {
 }
 
 impl Link {
+    /// Connect to the Ethernet module.
     pub fn connect(addr: SocketAddr, config: LinkConfig) -> io::Result<Link> {
         let stream = TcpStream::connect_timeout(&addr, config.connect_timeout)?;
         stream.set_nodelay(true)?;
         stream.set_read_timeout(Some(Duration::from_millis(5)))?;
+        Link::spawn(Box::new(stream), config)
+    }
+
+    /// Open a unit plugged in over USB, by its `hidraw` node (see
+    /// [`find_usb_devices`]).
+    pub fn open_usb(path: &Path, config: LinkConfig) -> io::Result<Link> {
+        Link::spawn(Box::new(usb::open(path)?), config)
+    }
+
+    pub(crate) fn spawn(io: Box<dyn Transport>, config: LinkConfig) -> io::Result<Link> {
         let (tx, cmd_rx) = mpsc::channel();
         let (ev_tx, rx) = mpsc::channel();
         let pending = Arc::new(AtomicUsize::new(0));
         let worker_pending = Arc::clone(&pending);
         let handle = std::thread::Builder::new()
             .name("dsp206-link".into())
-            .spawn(move || worker::run(stream, config, cmd_rx, ev_tx, worker_pending))?;
+            .spawn(move || worker::run(io, config, cmd_rx, ev_tx, worker_pending))?;
         Ok(Link {
             tx,
             rx,

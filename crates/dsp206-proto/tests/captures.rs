@@ -7,7 +7,7 @@
 use dsp206_proto::command::{Reply, READ_ONLY_CODES};
 use dsp206_proto::program::{name_text, Program, ProgramAssembler};
 use dsp206_proto::units::{eq_gain_db, gain_db, q_value, threshold_db, time_ms};
-use dsp206_proto::{Frame, FrameDecoder};
+use dsp206_proto::{hid, Frame, FrameDecoder};
 
 const CAPTURES: [(&str, &str); 2] = [
     (
@@ -19,6 +19,12 @@ const CAPTURES: [(&str, &str); 2] = [
         include_str!("../../../tools/re/captures/dump-run12.json"),
     ),
 ];
+
+/// USB sessions (protocol.md §1.2). Kept apart from `CAPTURES`: they include
+/// `0x12` and the user-approved Out6 mute, so they are not read-only.
+const USB_FULL_READ: &str = include_str!("../../../tools/re/captures/usb-01-full-read.json");
+const USB_METERS: &str = include_str!("../../../tools/re/captures/usb-02-meters-30s.json");
+const USB_MUTE: &str = include_str!("../../../tools/re/captures/usb-03-mute-out6.json");
 
 /// `(direction, bytes)` of every frame, without a JSON dependency.
 fn frames(json: &str) -> Vec<(String, Vec<u8>)> {
@@ -202,4 +208,117 @@ fn factory_default_matches_every_captured_page() {
         }
     }
     assert_eq!(checked, 10);
+}
+
+fn hex(s: &str) -> Vec<u8> {
+    (0..s.len())
+        .step_by(2)
+        .map(|k| u8::from_str_radix(&s[k..k + 2], 16).expect("bad hex"))
+        .collect()
+}
+
+/// Value of a string field in a one-object-per-line capture entry.
+fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    let start = line.find(&format!("\"{key}\": \""))? + key.len() + 5;
+    let len = line[start..].find('"')?;
+    Some(&line[start..start + len])
+}
+
+fn program_from(json: &str) -> ProgramAssembler {
+    let mut asm = ProgramAssembler::new();
+    for (dir, bytes) in frames(json) {
+        if dir == "rx" {
+            if let Reply::ProgramPage { page, data } = Reply::parse(&Frame::decode(&bytes).unwrap())
+            {
+                asm.insert(page, &data).unwrap();
+            }
+        }
+    }
+    asm
+}
+
+#[test]
+fn usb_sessions_are_well_formed_and_fully_answered() {
+    for (name, json) in [
+        ("usb-01", USB_FULL_READ),
+        ("usb-02", USB_METERS),
+        ("usb-03", USB_MUTE),
+    ] {
+        let all = frames(json);
+        for (dir, bytes) in &all {
+            let f = Frame::decode(bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert!(hid::output_report(bytes).is_ok(), "{name}: frame too long");
+            let expected = if dir == "tx" { (0, 1) } else { (1, 0) };
+            assert_eq!((f.src, f.dst), expected, "{name}");
+        }
+        // One reply per request, except the unanswered 0x11 at the end of usb-03.
+        let tx = all.iter().filter(|(d, _)| d == "tx").count();
+        let rx = all.iter().filter(|(d, _)| d == "rx").count();
+        let silent = all
+            .iter()
+            .filter(|(d, b)| d == "tx" && b[5] == 0x11)
+            .count();
+        assert_eq!(tx, rx + silent, "{name}");
+    }
+}
+
+#[test]
+fn usb_full_read_is_the_factory_default_program() {
+    // The first capture with all 19 pages (the network ones lost some).
+    let asm = program_from(USB_FULL_READ);
+    assert!(asm.missing_pages().is_empty());
+    assert_eq!(asm.program().unwrap(), Program::factory_default());
+}
+
+#[test]
+fn end_of_transfer_is_acknowledged() {
+    // 0x12 got `10 02 01 00 01 01 10 03 00` over USB (protocol.md §4.1).
+    let all = frames(USB_FULL_READ);
+    let i = all
+        .iter()
+        .position(|(d, b)| d == "tx" && b[5] == 0x12)
+        .unwrap();
+    assert_eq!(
+        all[i + 1].1,
+        [0x10, 0x02, 0x01, 0x00, 0x01, 0x01, 0x10, 0x03, 0x00]
+    );
+}
+
+#[test]
+fn usb_reports_carry_one_frame_then_stale_padding() {
+    // Raw 64-byte input reports from the unit (protocol.md §1.2).
+    let mut stale = 0;
+    for line in USB_MUTE.lines().filter(|l| l.contains("\"report\"")) {
+        let report = hex(field(line, "report").unwrap());
+        let frame = hex(field(line, "hex").unwrap());
+        assert_eq!(report.len(), hid::REPORT_LEN);
+        assert_eq!(hid::input_frame(&report), &frame[..]);
+        let padding = &report[frame.len()..];
+        if padding.windows(2).any(|w| w == [0x10, 0x03]) {
+            stale += 1; // leftovers of earlier, longer frames
+        }
+        // The last 4 bytes are past every frame the unit sends (60 bytes max).
+        assert_eq!(&report[60..], [0x00, 0x49, 0xb4, 0x53]);
+    }
+    assert_eq!(
+        stale, 3,
+        "the short replies (connect, two ACKs) and none else"
+    );
+}
+
+#[test]
+fn usb_mute_out6_reads_back_in_the_output_mute_mask() {
+    // memory-map.md §3: 0x382 = output mute mask, bit 5 = Out6.
+    let pages: Vec<Vec<u8>> = frames(USB_MUTE)
+        .into_iter()
+        .filter_map(
+            |(dir, bytes)| match Reply::parse(&Frame::decode(&bytes).unwrap()) {
+                Reply::ProgramPage { page: 17, data } if dir == "rx" => Some(data),
+                _ => None,
+            },
+        )
+        .collect();
+    let mask = |data: &Vec<u8>| u16::from_le_bytes([data[0x382 - 850], data[0x382 - 850 + 1]]);
+    let masks: Vec<u16> = pages.iter().map(mask).collect();
+    assert_eq!(masks, [0x0000, 0x0020, 0x0000]);
 }

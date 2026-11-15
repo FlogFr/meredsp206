@@ -36,6 +36,15 @@ yet**. Possible causes, from most to least likely:
 - The firmware expects the exact pacing of the original app: one request in
   flight, 800 ms timeout, then a 300 ms `0x40` poll.
 
+### 1.1 USB
+
+Everything above concerns the Ethernet module. Over USB (protocol.md §1.2) the
+PC talks to the DSP without that bridge, and the Linux app holds the `hidraw`
+node for the whole session. **Over USB the DSP never went silent** (sessions
+U1–U4 in section 3.2): every request was answered within about 20 ms. This
+points at the Ethernet module, or the DSP's UART link to it, as the cause of
+the network silences [guess]. Prefer USB when the unit is within cable reach.
+
 ## 2. Rules for the Linux client
 
 - Open **one** TCP connection per device and keep it for the whole app session.
@@ -74,3 +83,66 @@ minutes between them.
 Runs 6 and 12 both stop after a clean burst, at 1.8 s and 1.0 s after the connect
 and after about 335 and 175 bytes sent. Neither the elapsed time nor the byte
 count gives a consistent threshold.
+
+### 3.1 Packet captures (afternoon of 2026-11-15)
+
+Each session below started at least 85 s after the previous one ended, with a
+packet capture (`dumpcap`) running. Raw logs: `tools/re/captures/link-*.json`.
+
+| # | Session | Result |
+|---|---|---|
+| 13 | original-app sequence (`10 13 2c 22 14 29×21 27×19 12`), back to back | 17 replies in 0.92 s, one more at 1.77 s, then one `0x02` at 17.9 s and nothing else |
+| 14 | `10 13`, then `0x40` every 300 ms for 25 s | 8 replies until 1.70 s, then 6 isolated replies in 23 s |
+| 15 | TCP connect, **3 s idle**, then `10 13` and `0x40` every 300 ms | **no reply at all** |
+| 16 | same as #14, as a control for #15 | 7 replies until 1.40 s, then silence |
+
+What the captures show [live]:
+
+- **TCP stays healthy.** The module acknowledges every request 7–12 ms after it
+  arrives and its receive window stays at 256 bytes, in the good phase and in the
+  silent phase alike. The bytes reach the module and leave its TCP buffer.
+- **Replies are all or nothing.** Every reply that arrives is a complete frame with
+  a valid checksum. No stray or partial bytes were ever received.
+- **The responsive window is tied to the TCP connection, not to the requests.**
+  It lasts 0.9–1.8 s after the TCP handshake, whatever the request rate. Waiting
+  3 s before the first request (#15) loses it completely, `0x10` included.
+- In the silent phase, a request sent 0.3 s after an answered one was never
+  answered. Requests 0.8 s apart were answered about one time in four.
+- The occasional `0x02` reply suggests that the DSP sometimes receives a damaged
+  frame [guess].
+- The module ARPs for the gateway (`192.168.1.1`) twice right after each TCP
+  connect. The replies still go straight to the PC's MAC address.
+
+Later sessions, still at least 90 s apart (captures `link-17` to `link-23`):
+
+| # | Session | Result |
+|---|---|---|
+| 17 | as #13, right after a **power cycle** of the DSP | 37 replies until 1.96 s, then 2 isolated replies. The power cycle changes nothing |
+| 18 | `10`, mute Out6 on, mute Out6 off, read page 17 (user-approved) | `0x10` and the first mute answered (`0x01` ACK after 66 ms), then silence from 0.15 s. The Out6 MUTE LED lit |
+| 19 | `10`, read page 17, mute Out6 off, read page 17 | all answered: `0x382` read `0x20`, then `0` after the unmute. The LED went off |
+| 20 | as #13 with a **200 ms pause** after each reply | answered in bursts until 10.85 s (21 replies), with gaps of 1.1, 1.9 and 3.5 s, then one `0x02` at 21.6 s and nothing else |
+| 21 | repeat of #15 (3 s idle after the TCP connect) | no reply at all, again |
+| 22 | `10`, then 60 s idle **while connected**, then requests | only the `0x10` reply, then one `0x02` 125 s in. Staying connected and quiet does not bring the DSP back |
+| 23 | six **short sessions** (`10 13 40 11`, close) 2 s apart | the first got its 3 replies in 0.19 s, the next five nothing (one `0x02`) |
+
+So far:
+
+- A session gets a working window only when it opens at least ~90 s after the
+  previous one, and only if it talks right away. Neither a power cycle, nor
+  pacing, nor reconnecting, nor staying quiet restores the link.
+- Inside the window, setters work and are acknowledged.
+- Long silences often end with a `0x02` reply. This fits a DSP that lost the
+  start of a frame and waits for the rest of a long phantom frame, swallowing
+  the next requests [guess].
+
+### 3.2 USB sessions (evening of 2026-11-15)
+
+Same unit, plugged into the PC over USB (`/dev/hidraw5`), sessions about 60 s
+apart, the network cable unused. Captures `tools/re/captures/usb-*.json`.
+
+| # | Session | Result |
+|---|---|---|
+| U1 | `dsp206 --usb info`: `10 13`, `27`×19, `12`, `14`, `29`×21, `2c`, `22` | all 45 answered in 0.55 s, 6–21 ms each. The 19 pages equal the factory default program |
+| U2 | `dsp206 --usb meters 100`: `10`, then `40` every 300 ms for 30 s | 101 replies to 101 requests, about 10 ms each |
+| U3 | `10`, page 17, mute Out6 on, 1 s, page 17, mute Out6 off, page 17, `11` (user-approved) | all answered; `0x382` read `0`, `0x20`, `0`. `0x11` gets no reply, as over the network |
+| U4 | GTK app, `meredsp206 --usb`: full read, then meters every 300 ms for about 30 s | identity, preset and program shown; closed by killing the process |
