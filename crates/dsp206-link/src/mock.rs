@@ -25,6 +25,9 @@ pub struct MockOptions {
     /// Answer the first this-many frames with `0x02` (NAK) instead of handling
     /// them, as the real unit does with a damaged frame.
     pub nak_first: usize,
+    /// How long a preset store or recall takes before its ACK (the real
+    /// unit writes or reads its flash; the original editor waits 10 s / 50 s).
+    pub preset_delay: Duration,
 }
 
 /// Everything the simulated device remembers.
@@ -34,7 +37,6 @@ pub struct MockState {
     /// 21 preset slots (name index 0..=20 as in `0x29`).
     pub presets: Vec<Program>,
     pub current_preset: u8,
-    pub pending_name: Option<[u8; PROGRAM_NAME_LEN]>,
     pub tone: (u8, u8),
     /// Every request received, in order.
     pub received: Vec<Request>,
@@ -49,7 +51,6 @@ impl Default for MockState {
             presets: vec![program.clone(); 21],
             program,
             current_preset: 0,
-            pending_name: None,
             tone: (0, 0),
             received: Vec::new(),
             replies_sent: 0,
@@ -147,11 +148,14 @@ fn client(mut stream: TcpStream, state: &Mutex<MockState>, stop: &AtomicBool, op
             Err(_) => return,
         }
         for frame in decoder.by_ref().flatten() {
+            let Some(req) = Request::parse(frame.cmd, &frame.data) else {
+                continue;
+            };
+            if matches!(req, Request::StorePreset(_) | Request::RecallPreset(_)) {
+                std::thread::sleep(opts.preset_delay);
+            }
             let reply = {
                 let mut st = lock(state);
-                let Some(req) = Request::parse(frame.cmd, &frame.data) else {
-                    continue;
-                };
                 st.received.push(req.clone());
                 if st.naks_sent < opts.nak_first {
                     st.naks_sent += 1;
@@ -225,16 +229,14 @@ fn respond(
         }
         GetMeters => reply(dev, 0x40, meters(&st.program, t)),
         EndOfTransfer => ack(),
+        // The original editor names its current program with the text it
+        // sends in `0x26` (0x416444), then stores that program.
         SetPresetName(name) => {
-            st.pending_name = Some(*name);
+            st.program.name = *name;
             ack()
         }
         StorePreset(n) => {
-            let mut p = st.program.clone();
-            if let Some(name) = st.pending_name.take() {
-                p.name = name;
-            }
-            *st.presets.get_mut(*n as usize)? = p;
+            *st.presets.get_mut(*n as usize)? = st.program.clone();
             ack()
         }
         RecallPreset(n) => {

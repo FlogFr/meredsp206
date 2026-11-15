@@ -146,3 +146,4 @@ apart, the network cable unused. Captures `tools/re/captures/usb-*.json`.
 | U2 | `dsp206 --usb meters 100`: `10`, then `40` every 300 ms for 30 s | 101 replies to 101 requests, about 10 ms each |
 | U3 | `10`, page 17, mute Out6 on, 1 s, page 17, mute Out6 off, page 17, `11` (user-approved) | all answered; `0x382` read `0`, `0x20`, `0`. `0x11` gets no reply, as over the network |
 | U4 | GTK app, `meredsp206 --usb`: full read, then meters every 300 ms for about 30 s | identity, preset and program shown; closed by killing the process |
+| U5 | Read-only after the user's "store U01" with the swapped codes: `10`, `14`, `29` 0–3, `11` | current preset 1 (was 0 in U1), U01 still "Default Preset": the unit had loaded U01 (protocol.md §4.2) |

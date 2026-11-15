@@ -63,8 +63,11 @@ pub enum Request {
     GetPresetSlots,
     GetPresetName(u8),
     ReadProgramPage(u8),
+    /// `0x26`: name of the current program, sent before a store.
     SetPresetName([u8; PROGRAM_NAME_LEN]),
+    /// `0x21 [n]`: store the current program into user preset `n` (1 = U01).
     StorePreset(u8),
+    /// `0x20 [n]`: load preset `n` (0 = F00, 1 = U01) as the current program.
     RecallPreset(u8),
     // Parameter setters (§4.3)
     SetGain {
@@ -193,8 +196,8 @@ impl Request {
             Identify => 0x13,
             GetCurrentPreset => 0x14,
             SetDelayUnit(_) => 0x15,
-            StorePreset(_) => 0x20,
-            RecallPreset(_) => 0x21,
+            RecallPreset(_) => 0x20,
+            StorePreset(_) => 0x21,
             GetPresetSlots => 0x22,
             SetPresetName(_) => 0x26,
             ReadProgramPage(_) => 0x27,
@@ -303,8 +306,8 @@ impl Request {
             0x13 => exact(0).map(|_| Identify)?,
             0x14 => exact(0).map(|_| GetCurrentPreset)?,
             0x15 => SetDelayUnit(b(0)?),
-            0x20 => StorePreset(b(0)?),
-            0x21 => RecallPreset(b(0)?),
+            0x20 => RecallPreset(b(0)?),
+            0x21 => StorePreset(b(0)?),
             0x22 => exact(0).map(|_| GetPresetSlots)?,
             0x26 => SetPresetName(d.try_into().ok()?),
             0x27 => ReadProgramPage(b(0)?),
@@ -812,6 +815,19 @@ mod tests {
             hex(&Request::Connect.frame(1).encode().unwrap()),
             "10 02 00 01 01 10 10 03 11"
         );
+    }
+
+    #[test]
+    fn preset_codes_follow_the_original_editor() {
+        // Load is `0x20` (0x426f8c), store is `0x21` sent after the `0x26`
+        // ACK (0x422df1). They were swapped once, so a "store" loaded U01.
+        assert_eq!(Request::RecallPreset(0).code(), 0x20);
+        assert_eq!(Request::StorePreset(1).code(), 0x21);
+        assert_eq!(Request::SetPresetName([b' '; 14]).code(), 0x26);
+        assert_eq!(Request::parse(0x21, &[1]), Some(Request::StorePreset(1)));
+        assert_eq!(Request::parse(0x20, &[0]), Some(Request::RecallPreset(0)));
+        let store_u01 = Request::StorePreset(1).frame(1).encode().unwrap();
+        assert_eq!(hex(&store_u01[..7]), "10 02 00 01 02 21 01");
     }
 
     #[test]

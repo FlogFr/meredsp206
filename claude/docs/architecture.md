@@ -55,7 +55,10 @@ Only depends on `dsp206-proto` and `std`.
   (`/dev/hidrawN`) own the only connection. Both hand a `Transport` (send one
   frame, receive bytes with a short wait, close) to the same worker thread,
   which enforces one request in flight, timeouts, retries, coalescing by
-  `(cmd, ch, band)`, and a priority queue for writes.
+  `(cmd, ch, band)`, and a priority queue for writes. A preset store waits
+  10 s for its ACK and a recall 50 s, as in the original editor, and neither
+  is sent twice. `store_preset_sequence()` gives the store steps
+  (`0x26`, `0x21`, `0x12`).
 - The USB transport (`usb` module) puts each frame in a 64-byte report with
   report ID 0 and cuts incoming reports by the frame length
   (`dsp206_proto::hid`, protocol.md §1.2). The node is opened non-blocking and

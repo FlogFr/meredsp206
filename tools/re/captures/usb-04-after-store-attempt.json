@@ -1,0 +1,21 @@
+{
+"description": "USB session 4, read-only (0x10, 0x14, 0x29 for n = 0..3, 0x11), after the user tried 'Store U01' with the app that still sent 0x20 for a store. The current preset is now 1 (usb-01 read 0) and U01 is still named 'Default Preset': the unit loaded U01 instead of storing into it (protocol.md section 4.2). Times in seconds from the open.",
+"link": "usb",
+"node": "/dev/hidraw5",
+"date": "2026-11-15",
+"frames": [
+{"t": 0.055, "dir": "tx", "hex": "100200010110100311"},
+{"t": 0.08, "dir": "rx", "hex": "1002010002101910030b"},
+{"t": 0.08, "dir": "tx", "hex": "100200010114100315"},
+{"t": 0.083, "dir": "rx", "hex": "10020100021401100317"},
+{"t": 0.083, "dir": "tx", "hex": "1002000102290010032b"},
+{"t": 0.089, "dir": "rx", "hex": "1002010010290044656661756c7420507265736574100377"},
+{"t": 0.089, "dir": "tx", "hex": "1002000102290110032a"},
+{"t": 0.099, "dir": "rx", "hex": "1002010010290144656661756c7420507265736574100376"},
+{"t": 0.099, "dir": "tx", "hex": "10020001022902100329"},
+{"t": 0.109, "dir": "rx", "hex": "1002010010290244656661756c7420507265736574100375"},
+{"t": 0.109, "dir": "tx", "hex": "10020001022903100328"},
+{"t": 0.124, "dir": "rx", "hex": "1002010010290344656661756c7420507265736574100374"},
+{"t": 0.124, "dir": "tx", "hex": "100200010111100310"}
+]
+}

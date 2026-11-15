@@ -2,7 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use dsp206_proto::program::{PAGE_SIZE, PROGRAM_SIZE};
+use dsp206_proto::program::{name_text, preset_name_field, PAGE_SIZE, PROGRAM_SIZE};
 use dsp206_proto::{Program, Request};
 
 /// Edits to the same parameter within this window form one undo step
@@ -18,6 +18,8 @@ pub struct Model {
     pub preset_names: Vec<String>,
     pub current_preset: Option<u8>,
     pub identity: Option<String>,
+    /// A store waiting for its preset name to be read back: slot and name.
+    pending_store: Option<(u8, String)>,
 }
 
 impl Default for Model {
@@ -30,6 +32,7 @@ impl Default for Model {
             preset_names: vec![String::new(); 21],
             current_preset: None,
             identity: None,
+            pending_store: None,
         }
     }
 }
@@ -117,6 +120,48 @@ impl Model {
         reqs
     }
 
+    /// Store the current program into user preset `n` (1 = U01). The program
+    /// takes the new name, as in the original editor. Returns the requests:
+    /// the store itself, then reads that let [`Model::store_outcome`] check it.
+    pub fn begin_store(&mut self, n: u8, name: &str) -> Vec<Request> {
+        self.program.name = preset_name_field(name);
+        let name = name_text(&self.program.name);
+        let mut reqs = dsp206_link::store_preset_sequence(n, &name);
+        reqs.extend([Request::GetPresetName(n), Request::GetCurrentPreset]);
+        self.pending_store = Some((n, name));
+        reqs
+    }
+
+    /// Message for a preset name read back from the device, when it ends a
+    /// pending store.
+    pub fn store_outcome(&mut self, index: u8, name: &str) -> Option<String> {
+        let (n, expected) = self.pending_store.take_if(|(n, _)| *n == index)?;
+        let label = Self::preset_label(n);
+        Some(if name == expected {
+            format!("Stored {label} “{name}”")
+        } else {
+            format!("{label} was not stored: the unit still names it “{name}”")
+        })
+    }
+
+    /// Message for a preset operation the device did not acknowledge.
+    pub fn unconfirmed(&mut self, req: &Request) -> Option<String> {
+        match req {
+            Request::StorePreset(_) => {
+                let (n, _) = self.pending_store.take()?;
+                Some(format!(
+                    "The unit did not confirm storing {}",
+                    Self::preset_label(n)
+                ))
+            }
+            Request::RecallPreset(n) => Some(format!(
+                "The unit did not confirm loading {}",
+                Self::preset_label(*n)
+            )),
+            _ => None,
+        }
+    }
+
     pub fn preset_label(index: u8) -> String {
         if index == 0 {
             "F00".into()
@@ -201,6 +246,52 @@ mod tests {
         assert_eq!(m.program, other);
         m.undo();
         assert_eq!(m.program.inputs[0].gain, 333);
+    }
+
+    #[test]
+    fn store_names_the_program_and_checks_the_read_back() {
+        let mut m = Model::default();
+        let reqs = m.begin_store(1, "Club ");
+        assert_eq!(
+            reqs,
+            [
+                Request::SetPresetName(*b"Club          "),
+                Request::StorePreset(1),
+                Request::EndOfTransfer,
+                Request::GetPresetName(1),
+                Request::GetCurrentPreset,
+            ]
+        );
+        assert_eq!(m.program.name_text(), "Club");
+        // Another slot's name does not end the store.
+        assert_eq!(m.store_outcome(2, "Club"), None);
+        assert_eq!(
+            m.store_outcome(1, "Club").as_deref(),
+            Some("Stored U01 “Club”")
+        );
+        assert_eq!(m.store_outcome(1, "Club"), None);
+        m.begin_store(3, "Live");
+        assert_eq!(
+            m.store_outcome(3, "Default Preset").as_deref(),
+            Some("U03 was not stored: the unit still names it “Default Preset”")
+        );
+    }
+
+    #[test]
+    fn unconfirmed_preset_operations_are_reported() {
+        let mut m = Model::default();
+        m.begin_store(2, "A");
+        assert_eq!(
+            m.unconfirmed(&Request::StorePreset(2)).as_deref(),
+            Some("The unit did not confirm storing U02")
+        );
+        assert_eq!(m.store_outcome(2, "A"), None);
+        assert_eq!(m.unconfirmed(&Request::StorePreset(2)), None);
+        assert_eq!(
+            m.unconfirmed(&Request::RecallPreset(0)).as_deref(),
+            Some("The unit did not confirm loading F00")
+        );
+        assert_eq!(m.unconfirmed(&gain(0, 1)), None);
     }
 
     #[test]

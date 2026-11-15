@@ -25,6 +25,9 @@ const CAPTURES: [(&str, &str); 2] = [
 const USB_FULL_READ: &str = include_str!("../../../tools/re/captures/usb-01-full-read.json");
 const USB_METERS: &str = include_str!("../../../tools/re/captures/usb-02-meters-30s.json");
 const USB_MUTE: &str = include_str!("../../../tools/re/captures/usb-03-mute-out6.json");
+/// Read-only, after a "store U01" that sent `0x20 01` (a load) by mistake.
+const USB_AFTER_STORE: &str =
+    include_str!("../../../tools/re/captures/usb-04-after-store-attempt.json");
 
 /// `(direction, bytes)` of every frame, without a JSON dependency.
 fn frames(json: &str) -> Vec<(String, Vec<u8>)> {
@@ -243,6 +246,7 @@ fn usb_sessions_are_well_formed_and_fully_answered() {
         ("usb-01", USB_FULL_READ),
         ("usb-02", USB_METERS),
         ("usb-03", USB_MUTE),
+        ("usb-04", USB_AFTER_STORE),
     ] {
         let all = frames(json);
         for (dir, bytes) in &all {
@@ -251,7 +255,7 @@ fn usb_sessions_are_well_formed_and_fully_answered() {
             let expected = if dir == "tx" { (0, 1) } else { (1, 0) };
             assert_eq!((f.src, f.dst), expected, "{name}");
         }
-        // One reply per request, except the unanswered 0x11 at the end of usb-03.
+        // One reply per request, except the unanswered 0x11 at the end.
         let tx = all.iter().filter(|(d, _)| d == "tx").count();
         let rx = all.iter().filter(|(d, _)| d == "rx").count();
         let silent = all
@@ -268,6 +272,33 @@ fn usb_full_read_is_the_factory_default_program() {
     let asm = program_from(USB_FULL_READ);
     assert!(asm.missing_pages().is_empty());
     assert_eq!(asm.program().unwrap(), Program::factory_default());
+}
+
+#[test]
+fn mistaken_store_left_u01_loaded() {
+    // usb-01 read preset 0. After `0x26` + `0x20 01` (meant as a store) the
+    // unit runs U01, whose name did not change: `0x20` loads (protocol.md §4.2).
+    let replies: Vec<Reply> = frames(USB_AFTER_STORE)
+        .iter()
+        .filter(|(d, _)| d == "rx")
+        .map(|(_, b)| Reply::parse(&Frame::decode(b).unwrap()))
+        .collect();
+    assert!(replies.contains(&Reply::CurrentPreset(1)));
+    assert!(replies.contains(&Reply::PresetName {
+        index: 1,
+        name: "Default Preset".into()
+    }));
+    let before: Vec<Reply> = frames(USB_FULL_READ)
+        .iter()
+        .filter(|(d, _)| d == "rx")
+        .map(|(_, b)| Reply::parse(&Frame::decode(b).unwrap()))
+        .collect();
+    assert!(before.contains(&Reply::CurrentPreset(0)));
+    for (dir, bytes) in frames(USB_AFTER_STORE) {
+        if dir == "tx" {
+            assert!(READ_ONLY_CODES.contains(&bytes[5]), "{bytes:02x?}");
+        }
+    }
 }
 
 #[test]

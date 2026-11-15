@@ -99,6 +99,49 @@ pub fn parse_number(text: &str) -> Option<f64> {
     num.parse::<f64>().ok().map(|v| v * mult)
 }
 
+/// Short name of a command for the protocol log.
+pub fn command(cmd: u8, outgoing: bool) -> &'static str {
+    match (cmd, outgoing) {
+        (0x01, false) => "ack",
+        (0x02, false) => "nak/busy",
+        (0x10, _) => "connect",
+        (0x11, _) => "disconnect",
+        (0x12, _) => "end of transfer",
+        (0x13, _) => "identify",
+        (0x14, _) => "current preset",
+        (0x15, _) => "delay unit",
+        (0x20, _) => "recall preset",
+        (0x21, _) => "store preset",
+        (0x22, _) => "preset slots",
+        (0x24, false) => "program page",
+        (0x26, _) => "program name",
+        (0x27, _) => "read page",
+        (0x29, _) => "preset name",
+        (0x2A, _) => "copy channel",
+        (0x2C, _) => "lock state",
+        (0x30, _) => "compressor",
+        (0x31, _) => "low-pass",
+        (0x32, _) => "high-pass",
+        (0x33, _) => "peq band",
+        (0x34, _) => "gain",
+        (0x35, _) => "mute",
+        (0x36, _) => "polarity",
+        (0x38, _) => "delay",
+        (0x39, _) => "test tone",
+        (0x3A, _) => "routing",
+        (0x3B, _) => "link",
+        (0x3C, _) => "peq bypass",
+        (0x3D, _) => "channel name",
+        (0x3E, _) => "gate",
+        (0x3F, _) => "limiter",
+        (0x40, _) => "meters",
+        (0x41, _) => "mix gain",
+        (0x48, _) => "geq band",
+        (0x49, _) => "geq bypass",
+        _ => "",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,6 +163,21 @@ mod tests {
         assert_eq!(ratio(15), "∞:1");
         assert_eq!(delay(96, 0), "1.00 ms");
         assert_eq!(delay(960, 1), "3.435 m");
+    }
+
+    #[test]
+    fn command_names_match_the_protocol() {
+        use dsp206_proto::Request;
+        assert_eq!(
+            command(Request::StorePreset(1).code(), true),
+            "store preset"
+        );
+        assert_eq!(
+            command(Request::RecallPreset(1).code(), true),
+            "recall preset"
+        );
+        assert_eq!(command(0x01, false), "ack");
+        assert_eq!(command(0x01, true), "");
     }
 
     #[test]

@@ -38,6 +38,10 @@ pub struct LinkConfig {
     pub read_timeout: Duration,
     /// How long to wait for the `0x01` acknowledgement of a setter.
     pub write_timeout: Duration,
+    /// Acknowledgement wait for a preset store `0x21` (original app: 10 s).
+    pub store_timeout: Duration,
+    /// Acknowledgement wait for a preset recall `0x20` (original app: 50 s).
+    pub recall_timeout: Duration,
     /// How many times an unanswered request is sent again (original app: 2).
     pub retries: u8,
     /// Quiet time after each reply or abandoned request before the next frame.
@@ -55,6 +59,8 @@ impl Default for LinkConfig {
             connect_timeout: Duration::from_secs(3),
             read_timeout: Duration::from_millis(800),
             write_timeout: Duration::from_millis(500),
+            store_timeout: Duration::from_secs(10),
+            recall_timeout: Duration::from_secs(50),
             retries: 2,
             gap: Duration::ZERO,
             meter_interval: Duration::from_millis(300),
@@ -126,6 +132,17 @@ pub fn read_all_sequence() -> Vec<Request> {
     seq.push(Request::GetLockState);
     seq.push(Request::GetPresetSlots);
     seq
+}
+
+/// Store the current program into user preset `n` (1 = U01) under `name`,
+/// as the original editor does: `0x26` name, `0x21 [n]`, then `0x12`
+/// (protocol.md §4.2). The worker sends each step after the previous ACK.
+pub fn store_preset_sequence(n: u8, name: &str) -> Vec<Request> {
+    vec![
+        Request::SetPresetName(dsp206_proto::program::preset_name_field(name)),
+        Request::StorePreset(n),
+        Request::EndOfTransfer,
+    ]
 }
 
 /// Page reads, then `0x12` as the original editor does after a bulk read.

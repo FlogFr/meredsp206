@@ -68,7 +68,10 @@ Channel Name · Help (RS232 Code Table) · About.
 | `0x41cd98` | USB link thread (send, 800 ms timeout, retries) |
 | `0x41d824` | USB link enqueue (coalescing) |
 | `0x45ce78` | `ClientSocketRead` |
-| `0x422bac` | Reply dispatcher |
+| `0x422bac` | Reply dispatcher. Case `0x01` (ACK) drives the preset state machine (`+0x22c4`) |
+| `0x426c28` | Store preset: name the program, send `0x26`, state 2 (then `0x21`, `0x12` on ACKs) |
+| `0x426f8c` | Recall preset: send `0x20 [n]`, state 1 (then reads the 19 pages) |
+| `0x47bf68` | `TfmStoreName.btnOKClick`: pads the name with spaces, store or recall |
 | `0x419cd8` | Parse 19 program pages into the program struct |
 | `0x41aacc` | Parse stored-preset pages (upload flow) |
 | `0x417a14` | Send a whole program (download flow) |

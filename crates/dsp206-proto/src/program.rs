@@ -166,6 +166,14 @@ pub fn name_field<const N: usize>(text: &str) -> [u8; N] {
     out
 }
 
+/// Name sent with `0x26` before a store: space padded to 14 characters, as
+/// the original editor does (`btnOKClick` `0x47bfe8`).
+pub fn preset_name_field(text: &str) -> [u8; PROGRAM_NAME_LEN] {
+    let mut out: [u8; PROGRAM_NAME_LEN] = name_field(text.trim_end());
+    out.iter_mut().filter(|b| **b == 0).for_each(|b| *b = b' ');
+    out
+}
+
 struct Reader<'a> {
     b: &'a [u8],
     p: usize,
@@ -547,5 +555,8 @@ mod tests {
         assert_eq!(name_text(b"Out6    "), "Out6");
         assert_eq!(name_field::<8>("Sub Left too long"), *b"Sub Left");
         assert_eq!(name_field::<4>("é"), *b"?\0\0\0");
+        assert_eq!(preset_name_field("Main PA "), *b"Main PA       ");
+        assert_eq!(preset_name_field(""), [b' '; PROGRAM_NAME_LEN]);
+        assert_eq!(name_text(&preset_name_field("Club")), "Club");
     }
 }

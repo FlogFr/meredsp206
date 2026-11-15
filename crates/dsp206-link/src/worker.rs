@@ -263,10 +263,11 @@ impl Worker {
     }
 
     fn timeout_for(&self, req: &Request) -> std::time::Duration {
-        if req.is_write() {
-            self.cfg.write_timeout
-        } else {
-            self.cfg.read_timeout
+        match req {
+            Request::StorePreset(_) => self.cfg.store_timeout,
+            Request::RecallPreset(_) => self.cfg.recall_timeout,
+            r if r.is_write() => self.cfg.write_timeout,
+            _ => self.cfg.read_timeout,
         }
     }
 
@@ -277,7 +278,7 @@ impl Worker {
                 return Ok(());
             }
             let expects_reply = inf.req.reply_code().is_some();
-            if expects_reply && inf.tries < self.cfg.retries && inf.req != Request::GetMeters {
+            if expects_reply && inf.tries < self.cfg.retries && is_retried(&inf.req) {
                 inf.tries += 1;
                 let req = inf.req.clone();
                 let bytes = inf.bytes.clone();
@@ -326,6 +327,16 @@ impl Worker {
         });
         Ok(())
     }
+}
+
+/// Meter polls are simply skipped. A preset store or recall already had a
+/// long wait, and sending it again while the unit is busy with its flash
+/// helps nothing.
+fn is_retried(req: &Request) -> bool {
+    !matches!(
+        req,
+        Request::GetMeters | Request::StorePreset(_) | Request::RecallPreset(_)
+    )
 }
 
 /// Replies that carry an index must match the request's index.

@@ -217,11 +217,31 @@ slot 0 seems to be the factory/current one, giving 21 names [code][live].
 | `0x19` | Start full-unit upload | `[u16, u8]` | `0x19 …` | [code] |
 | `0x1a` | Write program page (*Download*) | `[u16, u8, data…]` | ACK | [code] |
 | `0x25` | Bulk transfer step (unknown) | `[u8, u8, data…]` | `0x25 …` | [code] |
-| `0x26` | Set preset name before storing | `[14 ASCII bytes]` | ACK | [code][guess] |
-| `0x20` | Store current program into preset `n` | `[n]` | ACK | [code][guess] |
-| `0x21` | Recall preset `n` | `[n]` | ACK, then re-read pages | [code][guess] |
+| `0x26` | Name the current program (first step of a store) | `[14 ASCII bytes]`, space padded | ACK | [code] |
+| `0x21` | Store the current program into user preset `n` (1 = U01 … 20 = U20) | `[n]` | ACK | [code] |
+| `0x20` | Recall (load) preset `n` (0 = F00, 1 = U01 …) as the current program | `[n]` | ACK, then re-read pages | [code][live] |
 | `0x23` | Unknown (used by *Upload* and lock flows) | — | ? | [code] |
 | `0x04` | Unknown, no data | — | ? | [code] |
+
+**Store and recall sequences** [code]. The original editor runs them as a state
+machine on the main form (state in `+0x22c4`, preset number in `+0x22b8`),
+advanced by each ACK in the reply dispatcher (`0x422bac`, case `0x01` at
+`0x422d52`). Meter polling is paused while it runs.
+
+- *Store* (`TfmStoreName.btnOKClick` `0x47bf68` → `0x426c28`): the program takes
+  the new name, padded with spaces to 14 characters (`0x47bfe8`), and the app
+  sends `0x26 [name]` with a 10 s timeout (state 2). On its ACK it sends
+  `0x21 [n]` (`0x422df1`, state 9), again 10 s. On that ACK it sends `0x12` and
+  closes the progress dialog. The store form's row `r` is U`r`, so `n` is the
+  U number.
+- *Recall* (`0x426f8c`, state 1): `0x20 [n]` with a **50 s** timeout. On its ACK
+  the app reads the 19 pages from `0x27 00` (`0x422d68`). In the recall form,
+  row 1 is F00 (`n = 0`) and row `r` is U`r-1`.
+
+Until 2026-11-15 our code had `0x20` and `0x21` swapped. A "store U01" sent
+`0x26` then `0x20 01`, which loaded U01 over the current program: the unit
+then reported current preset 1 and U01 kept its name
+(`tools/re/captures/usb-04-after-store-attempt.json`) [live].
 
 > `0x20`, `0x21`, `0x1a`, `0x26` and every command in 4.3 **change the sound**. Do
 > not send them to the device without the user's explicit agreement. See
@@ -307,5 +327,6 @@ Payload: 38 bytes = 10 groups of 3 bytes, then 8 status bytes.
 - Exact meaning of the `0x10` reply byte, the `0x2c` payload and the `0x22` table.
 - HPF/LPF bypass encoding. Global words `0x394` and `0x396` (see the memory map).
 - Write-path commands (`0x1a`, `0x25`, `0x19`, `0x28`, `0x23`, `0x04`) and the
-  ACK state machine of store, recall, upload and download.
+  ACK states of upload and download (store and recall are decoded, §4.2).
+- Whether the unit accepts a store into slot 0 (F00); the editor never sends it.
 - Test-tone payload values and the network/ID setup frames.

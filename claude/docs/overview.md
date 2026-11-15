@@ -47,8 +47,8 @@ in [protocol.md](protocol.md) and its storage in [memory-map.md](memory-map.md).
 
 - **Link** channels into groups so one edit applies to all members (`0x3b`).
 - **Copy** all settings from one channel to another (`0x2a`).
-- **Presets**: list, recall, store with a 14-character name (`0x22`, `0x29`, `0x21`,
-  `0x20`, `0x26`).
+- **Presets**: list (`0x22`, `0x29`), recall (`0x20`), store with a 14-character
+  name (`0x26` then `0x21`).
 - **Files**: save/open the current program as `.prs`, upload/download the whole unit
   as `.unt`.
 - **Factory default** reset (hidden menu in the original).

@@ -215,6 +215,93 @@ fn recall_then_fresh_read() {
 }
 
 #[test]
+fn store_preset_keeps_the_current_program_and_names_it() {
+    let mock = MockDevice::start(MockOptions::default()).unwrap();
+    mock.state().program.inputs[0].gain = 77;
+    let link = Link::connect(mock.addr(), fast()).unwrap();
+    for req in dsp206_link::store_preset_sequence(1, "Club") {
+        link.send(req);
+    }
+    link.send(Request::GetPresetName(1));
+    let events = collect(&link, Duration::from_secs(5), |e| {
+        matches!(e, Event::PresetName { .. })
+    });
+    assert!(events.contains(&Event::PresetName {
+        index: 1,
+        name: "Club".into()
+    }));
+    let st = mock.state();
+    assert_eq!(
+        st.received,
+        [
+            Request::SetPresetName(*b"Club          "),
+            Request::StorePreset(1),
+            Request::EndOfTransfer,
+            Request::GetPresetName(1),
+        ]
+    );
+    // The current program stays: storing never loads a preset.
+    assert_eq!(st.program.inputs[0].gain, 77);
+    assert_eq!(st.presets[1].inputs[0].gain, 77);
+    assert_eq!(st.current_preset, 0);
+}
+
+#[test]
+fn slow_store_is_awaited_and_sent_once() {
+    let mock = MockDevice::start(MockOptions {
+        preset_delay: Duration::from_millis(600),
+        ..MockOptions::default()
+    })
+    .unwrap();
+    // A setter would be given up after 150 ms; a store waits much longer.
+    let cfg = LinkConfig {
+        store_timeout: Duration::from_secs(3),
+        ..fast()
+    };
+    let link = Link::connect(mock.addr(), cfg).unwrap();
+    for req in dsp206_link::store_preset_sequence(2, "Slow") {
+        link.send(req);
+    }
+    let events = collect(
+        &link,
+        Duration::from_secs(3),
+        |e| matches!(e, Event::Trace { outgoing: true, bytes } if bytes[5] == 0x12),
+    );
+    assert!(!events.iter().any(|e| matches!(e, Event::Unconfirmed(_))));
+    let st = mock.state();
+    let stores = st
+        .received
+        .iter()
+        .filter(|r| matches!(r, Request::StorePreset(_)))
+        .count();
+    assert_eq!(stores, 1);
+    assert_eq!(st.presets[2].name_text(), "Slow");
+}
+
+#[test]
+fn unanswered_store_is_reported_without_resending() {
+    let mock = MockDevice::start(MockOptions {
+        silent_writes: true,
+        ..MockOptions::default()
+    })
+    .unwrap();
+    let cfg = LinkConfig {
+        store_timeout: Duration::from_millis(200),
+        ..fast()
+    };
+    let link = Link::connect(mock.addr(), cfg).unwrap();
+    link.send(Request::StorePreset(4));
+    let events = collect(&link, Duration::from_secs(3), |e| {
+        matches!(e, Event::Unconfirmed(_))
+    });
+    assert_eq!(
+        events.last(),
+        Some(&Event::Unconfirmed(Request::StorePreset(4)))
+    );
+    assert_eq!(mock.state().received, [Request::StorePreset(4)]);
+}
+
+#[test]
 fn close_sends_disconnect() {
     let mock = MockDevice::start(MockOptions::default()).unwrap();
     let link = Link::connect(mock.addr(), fast()).unwrap();

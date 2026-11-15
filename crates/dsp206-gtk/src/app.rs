@@ -12,6 +12,7 @@ use dsp206_link::{Event, Health, Link, LinkConfig, MockDevice, MockOptions, UsbD
 use dsp206_proto::{Channel, Meters, Program, Request};
 use gtk::{gio, glib};
 
+use crate::format;
 use crate::model::Model;
 use crate::ui::Ui;
 
@@ -391,12 +392,14 @@ impl App {
             self.toast("Not connected");
             return;
         }
-        self.send(Request::SetPresetName(dsp206_proto::program::name_field(
-            name,
-        )));
-        self.send(Request::StorePreset(n));
-        self.send(Request::GetPresetName(n));
-        self.toast(&format!("Storing {} “{name}”…", Model::preset_label(n)));
+        let reqs = self.model.borrow_mut().begin_store(n, name);
+        self.send_all(reqs);
+        self.toast(&format!(
+            "Storing {} “{}”…",
+            Model::preset_label(n),
+            name.trim()
+        ));
+        self.refresh();
     }
 
     pub fn load_program(&self, p: Program) {
@@ -429,8 +432,11 @@ impl App {
                 Event::Identity(id) => self.model.borrow_mut().identity = Some(id),
                 Event::CurrentPreset(n) => self.model.borrow_mut().current_preset = Some(n),
                 Event::PresetName { index, name } => {
-                    if let Some(slot) = self.model.borrow_mut().preset_names.get_mut(index as usize)
-                    {
+                    let mut model = self.model.borrow_mut();
+                    if let Some(msg) = model.store_outcome(index, &name) {
+                        self.toast(&msg);
+                    }
+                    if let Some(slot) = model.preset_names.get_mut(index as usize) {
                         *slot = name;
                     }
                     program_changed = true;
@@ -457,7 +463,12 @@ impl App {
                     *self.meters.borrow_mut() = Some(m);
                     meters = true;
                 }
-                Event::Unconfirmed(_) => self.unconfirmed.set(self.unconfirmed.get() + 1),
+                Event::Unconfirmed(req) => {
+                    self.unconfirmed.set(self.unconfirmed.get() + 1);
+                    if let Some(msg) = self.model.borrow_mut().unconfirmed(&req) {
+                        self.toast(&msg);
+                    }
+                }
                 Event::Timeout(_) => self.timeouts.set(self.timeouts.get() + 1),
                 Event::Health(h) => {
                     self.health.set(h);
@@ -494,7 +505,7 @@ impl App {
         let hex: Vec<String> = bytes.iter().map(|b| format!("{b:02x}")).collect();
         let what = bytes
             .get(5)
-            .map(|c| describe(*c, outgoing))
+            .map(|c| format::command(*c, outgoing))
             .unwrap_or_default();
         let mut log = self.log.borrow_mut();
         log.push_back(format!(
@@ -535,48 +546,5 @@ pub fn parse_channel(s: &str) -> Option<Channel> {
             .parse()
             .ok()
             .and_then(Channel::output),
-    }
-}
-
-/// Short name of a command for the protocol log.
-pub fn describe(cmd: u8, outgoing: bool) -> &'static str {
-    match (cmd, outgoing) {
-        (0x01, false) => "ack",
-        (0x02, false) => "nak/busy",
-        (0x10, _) => "connect",
-        (0x11, _) => "disconnect",
-        (0x12, _) => "end of transfer",
-        (0x13, _) => "identify",
-        (0x14, _) => "current preset",
-        (0x15, _) => "delay unit",
-        (0x20, _) => "store preset",
-        (0x21, _) => "recall preset",
-        (0x22, _) => "preset slots",
-        (0x24, false) => "program page",
-        (0x26, _) => "preset name",
-        (0x27, _) => "read page",
-        (0x29, _) => "preset name",
-        (0x2A, _) => "copy channel",
-        (0x2C, _) => "lock state",
-        (0x30, _) => "compressor",
-        (0x31, _) => "low-pass",
-        (0x32, _) => "high-pass",
-        (0x33, _) => "peq band",
-        (0x34, _) => "gain",
-        (0x35, _) => "mute",
-        (0x36, _) => "polarity",
-        (0x38, _) => "delay",
-        (0x39, _) => "test tone",
-        (0x3A, _) => "routing",
-        (0x3B, _) => "link",
-        (0x3C, _) => "peq bypass",
-        (0x3D, _) => "channel name",
-        (0x3E, _) => "gate",
-        (0x3F, _) => "limiter",
-        (0x40, _) => "meters",
-        (0x41, _) => "mix gain",
-        (0x48, _) => "geq band",
-        (0x49, _) => "geq bypass",
-        _ => "",
     }
 }

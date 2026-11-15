@@ -63,7 +63,8 @@ order:
    stays unexplained.
 2. Capture one frame per setter by changing a single parameter on a scratch
    preset (user approval needed, see `claude/rules/device-safety.md`).
-3. Decode the store/recall/upload/download ACK state machine (`0x422bac` case
-   `0x01`, states in `this+0x22c4`).
+3. Decode the upload/download states of the ACK state machine (`0x422bac`
+   case `0x01`, states in `this+0x22c4`). Store and recall are done
+   (protocol.md §4.2); a first store on the unit needs the user's approval.
 4. Decode `.prs` / `.unt` file formats (`OpenClick` `0x44556c`, `SaveClick`
    `0x445728`).
