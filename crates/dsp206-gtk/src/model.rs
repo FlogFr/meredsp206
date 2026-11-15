@@ -24,12 +24,15 @@ pub struct Model {
 
 impl Default for Model {
     fn default() -> Self {
+        // The unit does not report F00's name: it is the factory program.
+        let mut preset_names = vec![String::new(); 21];
+        preset_names[0] = Program::factory_default().name_text();
         Model {
             program: Program::factory_default(),
             undo: Vec::new(),
             redo: Vec::new(),
             last_edit: None,
-            preset_names: vec![String::new(); 21],
+            preset_names,
             current_preset: None,
             identity: None,
             pending_store: None,
@@ -296,6 +299,7 @@ mod tests {
 
     #[test]
     fn preset_labels() {
+        assert_eq!(Model::default().preset_names[0], "Default Preset");
         assert_eq!(Model::preset_label(0), "F00");
         assert_eq!(Model::preset_label(7), "U07");
     }

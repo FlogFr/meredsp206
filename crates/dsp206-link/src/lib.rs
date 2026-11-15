@@ -128,7 +128,7 @@ pub fn read_all_sequence() -> Vec<Request> {
     let mut seq = vec![Request::Connect, Request::Identify];
     seq.extend(program_read_sequence());
     seq.push(Request::GetCurrentPreset);
-    seq.extend((0..21).map(Request::GetPresetName));
+    seq.extend((1..=20).map(Request::GetPresetName));
     seq.push(Request::GetLockState);
     seq.push(Request::GetPresetSlots);
     seq

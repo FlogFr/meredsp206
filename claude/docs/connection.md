@@ -147,3 +147,5 @@ apart, the network cable unused. Captures `tools/re/captures/usb-*.json`.
 | U3 | `10`, page 17, mute Out6 on, 1 s, page 17, mute Out6 off, page 17, `11` (user-approved) | all answered; `0x382` read `0`, `0x20`, `0`. `0x11` gets no reply, as over the network |
 | U4 | GTK app, `meredsp206 --usb`: full read, then meters every 300 ms for about 30 s | identity, preset and program shown; closed by killing the process |
 | U5 | Read-only after the user's "store U01" with the swapped codes: `10`, `14`, `29` 0–3, `11` | current preset 1 (was 0 in U1), U01 still "Default Preset": the unit had loaded U01 (protocol.md §4.2) |
+| U6 | Read-only after stores with the fixed `0x21`: `10`, `14`, `22`, `29` 0–20, `11` | current preset 19; table bytes 0, 1, 18, 19 = `ff`, the same `0x29` indexes hold the stored names: `0x29 [i]` is U(i+1) |
+| U7 | Read-only: `10`, `14`, page 0, `29` 19–20, `11` | `0x29 [20]` equals the program name in page 0 |

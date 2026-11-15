@@ -132,10 +132,12 @@ def main():
         result["preset_slots"] = slots.hex() if slots else None
         cur = s.request(0x14)
         result["current_preset"] = cur[0] if cur else None
+        # 0x29 [i] names U(i+1); i = 20 is the current program (protocol.md 4.2).
         names = {}
         for n in range(21):
             r = s.request(0x29, bytes([n]))
-            names[n] = r[1:].split(b"\0")[0].decode("ascii", "replace") if r else None
+            key = f"U{n + 1:02d}" if n < 20 else "current"
+            names[key] = r[1:].split(b"\0")[0].decode("ascii", "replace") if r else None
         result["preset_names"] = names
         program = bytearray(PAGES * PAGE_SIZE)
         missing = []

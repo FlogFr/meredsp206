@@ -71,6 +71,8 @@ Channel Name · Help (RS232 Code Table) · About.
 | `0x422bac` | Reply dispatcher. Case `0x01` (ACK) drives the preset state machine (`+0x22c4`) |
 | `0x426c28` | Store preset: name the program, send `0x26`, state 2 (then `0x21`, `0x12` on ACKs) |
 | `0x426f8c` | Recall preset: send `0x20 [n]`, state 1 (then reads the 19 pages) |
+| `0x425068` | `0x29` reply: name `i` goes to U(`i`+1) via `0x416798`, then asks `0x29 [i+1]` up to 20 |
+| `0x416374` | `0x22` reply: byte `i` = `0xFF` marks U(`i`+1) as used |
 | `0x47bf68` | `TfmStoreName.btnOKClick`: pads the name with spaces, store or recall |
 | `0x419cd8` | Parse 19 program pages into the program struct |
 | `0x41aacc` | Parse stored-preset pages (upload flow) |

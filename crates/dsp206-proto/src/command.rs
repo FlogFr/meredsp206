@@ -61,6 +61,8 @@ pub enum Request {
     EndOfTransfer,
     // Presets and bulk transfer (§4.2)
     GetPresetSlots,
+    /// `0x29`: name of user preset `n` (1 = U01 … 20 = U20). The wire index
+    /// counts from 0, see [`name_index`].
     GetPresetName(u8),
     ReadProgramPage(u8),
     /// `0x26`: name of the current program, sent before a store.
@@ -164,6 +166,15 @@ pub enum ToneSource {
     Sine = 3,
 }
 
+/// Wire index of user preset `n` in `0x29` and in the `0x22` table: they
+/// count from 0, so U01 is 0 and U20 is 19, while `0x14`, `0x20` and `0x21`
+/// use 1 for U01 (TfmStorePreset list, `0x416798`; protocol.md §4.2). Index 20
+/// of `0x29` answers the current program's name, which reads back as
+/// preset 21.
+pub fn name_index(n: u8) -> u8 {
+    n.wrapping_sub(1)
+}
+
 /// Reply to setters and preset operations (protocol.md §3.3).
 pub const ACK: u8 = 0x01;
 /// Reply to a frame the device could not take, probably a damaged one
@@ -233,8 +244,8 @@ impl Request {
         match self {
             Connect | Disconnect | EndOfTransfer | Identify | GetCurrentPreset | GetLockState
             | GetMeters | GetPresetSlots => {}
-            GetPresetName(n) | ReadProgramPage(n) | StorePreset(n) | RecallPreset(n)
-            | SetDelayUnit(n) => d.push(*n),
+            GetPresetName(n) => d.push(name_index(*n)),
+            ReadProgramPage(n) | StorePreset(n) | RecallPreset(n) | SetDelayUnit(n) => d.push(*n),
             SetPresetName(name) => d.extend_from_slice(name),
             SetGain { ch, raw } | SetDelay { ch, raw } => {
                 d.push(ch.0);
@@ -311,7 +322,7 @@ impl Request {
             0x22 => exact(0).map(|_| GetPresetSlots)?,
             0x26 => SetPresetName(d.try_into().ok()?),
             0x27 => ReadProgramPage(b(0)?),
-            0x29 => GetPresetName(b(0)?),
+            0x29 => GetPresetName(b(0)?.wrapping_add(1)),
             0x2A => CopyChannel {
                 src: ch(0)?,
                 dst: ch(1)?,
@@ -545,7 +556,7 @@ impl Reply {
             (0x14, 1..) => Reply::CurrentPreset(d[0]),
             (0x22, _) => Reply::PresetSlots(d.clone()),
             (0x29, 1..) => Reply::PresetName {
-                index: d[0],
+                index: d[0].wrapping_add(1),
                 name: crate::program::name_text(&d[1..]),
             },
             (0x24, 1..) => Reply::ProgramPage {
@@ -596,7 +607,7 @@ mod tests {
             (Request::GetLockState, ""),
             (Request::GetMeters, ""),
             (Request::GetPresetSlots, ""),
-            (Request::GetPresetName(20), "14"),
+            (Request::GetPresetName(20), "13"),
             (Request::ReadProgramPage(18), "12"),
             (
                 Request::SetPresetName(*b"Main PA 3-way\0"),
@@ -831,6 +842,23 @@ mod tests {
     }
 
     #[test]
+    fn preset_names_count_from_zero_on_the_wire() {
+        // U01 is `0x29 00`; its reply comes back as preset 1 again. Reading
+        // `0x29 01` after storing U01 checked U02 instead (protocol.md §4.2).
+        assert_eq!(Request::GetPresetName(1).payload(), [0]);
+        assert_eq!(Request::GetPresetName(20).payload(), [19]);
+        assert_eq!(Request::parse(0x29, &[0]), Some(Request::GetPresetName(1)));
+        let reply = |i: u8| {
+            let mut d = vec![i];
+            d.extend_from_slice(b"Club          ");
+            Reply::parse(&Frame::request(0, 0x29, d))
+        };
+        assert!(matches!(reply(0), Reply::PresetName { index: 1, .. }));
+        assert!(matches!(reply(19), Reply::PresetName { index: 20, .. }));
+        assert!(matches!(reply(20), Reply::PresetName { index: 21, .. }));
+    }
+
+    #[test]
     fn only_documented_reads_are_read_only() {
         for (req, _) in examples() {
             assert_eq!(
@@ -918,7 +946,7 @@ mod tests {
         assert_eq!(
             Reply::parse(&f(0x29, b"\x05Default Preset")),
             Reply::PresetName {
-                index: 5,
+                index: 6,
                 name: "Default Preset".into()
             }
         );

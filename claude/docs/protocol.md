@@ -150,7 +150,8 @@ only after the matching reply arrives or a timeout expires [code].
 3. `0x2c` lock/PTS status → if locked, a password dialog is shown [code].
 4. `0x22` preset slot table [code][live].
 5. `0x14` current preset number [code][live].
-6. `0x29 [n]` for n = 0…20: preset names [code][live].
+6. `0x29 [i]` for i = 0…20: names of U01…U20, then the current program
+   (section 4.2) [code][live].
 7. `0x27 [p]` for p = 0…18 → `0x24 [p, 50 bytes]`: the current program, 928 bytes
    (see [memory-map.md](memory-map.md)) [code][live].
 8. `0x12` once all pages are read [code].
@@ -205,13 +206,25 @@ The device mirrors those fields in its current program.
 
 ### 4.2 Presets and bulk transfer
 
-The device keeps the **current program** plus **20 user presets** (U01–U20). Name
-slot 0 seems to be the factory/current one, giving 21 names [code][live].
+The device keeps the **current program**, the factory preset F00 and **20 user
+presets** (U01–U20). Two numberings coexist [code][live]:
+
+- `0x14`, `0x20` and `0x21` use the preset number: 0 = F00, 1 = U01 … 20 = U20.
+- `0x29` and the `0x22` table count user presets from 0: index `i` is U(`i`+1).
+  `0x29 [20]` answers the current program's name (bytes 2..16 of page 0).
+  F00's name is never read; the editor shows "Default Preset".
+
+Evidence: the `0x29` handler (`0x425068` → `0x416798`) writes reply `i` to
+line `i` of the store list (U01 first) and line `i`+1 of the recall list (F00
+first); `0x416374` sets the used flag of U(`i`+1) from table byte `i`. On the
+unit, after stores into U01, U02, U19 and U20, the table flagged bytes 0, 1, 18,
+19 and exactly those `0x29` indexes held the new names; `0x29 [20]` matched the
+page 0 name (`tools/re/captures/usb-05-stored-presets.json`, `usb-06-current-name.json`).
 
 | Cmd | Name | Request data | Reply | Tag |
 |---|---|---|---|---|
-| `0x22` | Get preset slot table | — | `0x22 [20 bytes]`. `0xFF` = slot flag set (empty?) | [live][guess] |
-| `0x29` | Get preset name | `[n]` (0–20) | `0x29 [n, 14 ASCII bytes]` | [live] |
+| `0x22` | Get preset slot table | — | `0x22 [20 bytes]`: byte `i` = `0xFF` when U(`i`+1) holds a stored program, else `0x00` | [code][live] |
+| `0x29` | Get preset name | `[i]` (0–20): U(`i`+1), 20 = current program | `0x29 [i, 14 ASCII bytes]` | [code][live] |
 | `0x27` | Read current-program page | `[p]` (0–18) | `0x24 [p, 50 bytes]` | [live] |
 | `0x28` | Read stored-preset page (*Upload* menu) | `[p]` | `0x28 [p, …]` | [code] |
 | `0x19` | Start full-unit upload | `[u16, u8]` | `0x19 …` | [code] |
@@ -237,6 +250,10 @@ advanced by each ACK in the reply dispatcher (`0x422bac`, case `0x01` at
 - *Recall* (`0x426f8c`, state 1): `0x20 [n]` with a **50 s** timeout. On its ACK
   the app reads the 19 pages from `0x27 00` (`0x422d68`). In the recall form,
   row 1 is F00 (`n = 0`) and row `r` is U`r-1`.
+
+After the swap was fixed, the app still checked a store by reading `0x29 [n]`,
+the name of U(`n`+1): "store U01" was reported as failed although it worked,
+and only U20 looked right, because `0x29 [20]` is the current program's name.
 
 Until 2026-11-15 our code had `0x20` and `0x21` swapped. A "store U01" sent
 `0x26` then `0x20 01`, which loaded U01 over the current program: the unit
@@ -324,7 +341,7 @@ Payload: 38 bytes = 10 groups of 3 bytes, then 8 status bytes.
 
 - Why the DSP stops answering after a burst or a reconnect over the network (see
   [connection.md](connection.md)). It does not happen over USB (section 1.2).
-- Exact meaning of the `0x10` reply byte, the `0x2c` payload and the `0x22` table.
+- Exact meaning of the `0x10` reply byte and the `0x2c` payload.
 - HPF/LPF bypass encoding. Global words `0x394` and `0x396` (see the memory map).
 - Write-path commands (`0x1a`, `0x25`, `0x19`, `0x28`, `0x23`, `0x04`) and the
   ACK states of upload and download (store and recall are decoded, §4.2).

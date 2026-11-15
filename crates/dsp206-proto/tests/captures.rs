@@ -28,6 +28,9 @@ const USB_MUTE: &str = include_str!("../../../tools/re/captures/usb-03-mute-out6
 /// Read-only, after a "store U01" that sent `0x20 01` (a load) by mistake.
 const USB_AFTER_STORE: &str =
     include_str!("../../../tools/re/captures/usb-04-after-store-attempt.json");
+/// Read-only, after stores into U01, U02, U19 and U20.
+const USB_STORED: &str = include_str!("../../../tools/re/captures/usb-05-stored-presets.json");
+const USB_CURRENT_NAME: &str = include_str!("../../../tools/re/captures/usb-06-current-name.json");
 
 /// `(direction, bytes)` of every frame, without a JSON dependency.
 fn frames(json: &str) -> Vec<(String, Vec<u8>)> {
@@ -247,6 +250,8 @@ fn usb_sessions_are_well_formed_and_fully_answered() {
         ("usb-02", USB_METERS),
         ("usb-03", USB_MUTE),
         ("usb-04", USB_AFTER_STORE),
+        ("usb-05", USB_STORED),
+        ("usb-06", USB_CURRENT_NAME),
     ] {
         let all = frames(json);
         for (dir, bytes) in &all {
@@ -299,6 +304,58 @@ fn mistaken_store_left_u01_loaded() {
             assert!(READ_ONLY_CODES.contains(&bytes[5]), "{bytes:02x?}");
         }
     }
+}
+
+fn replies(json: &str) -> Vec<Reply> {
+    frames(json)
+        .iter()
+        .filter(|(d, _)| d == "rx")
+        .map(|(_, b)| Reply::parse(&Frame::decode(b).unwrap()))
+        .collect()
+}
+
+#[test]
+fn preset_names_and_slots_count_u01_from_zero() {
+    // usb-05: the `0x22` table flags exactly the presets that carry a user
+    // name, both counted from 0 = U01 (protocol.md §4.2).
+    let stored = replies(USB_STORED);
+    let slots = stored
+        .iter()
+        .find_map(|r| match r {
+            Reply::PresetSlots(v) => Some(v.clone()),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(slots.len(), 20);
+    let mut names = std::collections::BTreeMap::new();
+    for r in &stored {
+        if let Reply::PresetName { index, name } = r {
+            names.insert(*index, name.clone());
+        }
+    }
+    assert_eq!(names.len(), 21);
+    for (i, flag) in slots.iter().enumerate() {
+        let user = names[&(i as u8 + 1)] != "Default Preset";
+        assert_eq!(*flag == 0xff, user, "U{:02}", i + 1);
+    }
+    assert_eq!(names[&1], "Full Stacks");
+    assert_eq!(names[&2], "Test Muted");
+    // Index 21 (wire 20) is not a preset but the current program's name,
+    // bytes 2..16 of page 0 (memory-map.md).
+    let after = replies(USB_CURRENT_NAME);
+    let program_name = after
+        .iter()
+        .find_map(|r| match r {
+            Reply::ProgramPage { page: 0, data } => Some(name_text(&data[2..16])),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(program_name, "Muted");
+    assert!(after.contains(&Reply::PresetName {
+        index: 21,
+        name: program_name.clone()
+    }));
+    assert_eq!(names[&21], program_name);
 }
 
 #[test]

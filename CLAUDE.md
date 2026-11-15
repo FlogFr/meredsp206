@@ -16,7 +16,9 @@ rule is installed on the dev machine. Open issue: over the network the real unit
 stops answering ~1–2 s after connect (connection.md); USB does not have it.
 Preset store/recall had `0x20`/`0x21` swapped until 2026-11-15, so "store U01"
 loaded U01 on the unit. Fixed from the original editor's state machine
-(protocol.md §4.2); the corrected store is not yet confirmed on hardware.
+(protocol.md §4.2). Stores into U01, U02, U19 and U20 then worked on the unit, but
+the app read back the wrong name (`0x29` counts U01 from 0); fixed the same day,
+the corrected read-back is not yet tried on hardware.
 
 ## Working agreement (applies to every request)
 
@@ -94,6 +96,9 @@ loaded U01 on the unit. Fixed from the original editor's state machine
 - Program = 928 bytes, read as 19 pages of 50 bytes with `0x27 [p]` → `0x24`.
 - Presets: `0x20 [n]` **loads** (0 = F00, 1 = U01). Store = `0x26 [name]`,
   then `0x21 [n]` (n = U number), then `0x12`, each after the previous ACK.
+  `0x29 [i]` and the `0x22` table count from 0: index `i` is U(i+1), and
+  `0x29 [20]` is the current program name. `Request::GetPresetName(n)` takes
+  the U number and does the shift.
 - Keep one long-lived connection, one request in flight, 800 ms timeout.
   Over the network the device goes silent about 1–2 s after connect (not over
   USB), see [claude/docs/connection.md](claude/docs/connection.md).

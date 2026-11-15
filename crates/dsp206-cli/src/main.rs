@@ -133,7 +133,7 @@ fn run(cli: Cli) -> Result<(), String> {
                     Event::Identity(id) => println!("Device: {id}"),
                     Event::CurrentPreset(n) => println!("Current preset: {n}"),
                     Event::PresetName { index, name } if cli.verbose => {
-                        println!("  preset {index:2}: {name}")
+                        println!("  U{index:02}: {name}")
                     }
                     Event::Program(p) => program = Some(p.clone()),
                     Event::ProgramIncomplete(m) => {

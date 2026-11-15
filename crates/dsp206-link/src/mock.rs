@@ -34,7 +34,7 @@ pub struct MockOptions {
 #[derive(Clone, Debug)]
 pub struct MockState {
     pub program: Program,
-    /// 21 preset slots (name index 0..=20 as in `0x29`).
+    /// F00 then U01..U20, indexed by preset number (`0x20`, `0x21`).
     pub presets: Vec<Program>,
     pub current_preset: u8,
     pub tone: (u8, u8),
@@ -215,10 +215,16 @@ fn respond(
         GetCurrentPreset => reply(dev, 0x14, vec![st.current_preset]),
         GetLockState => reply(dev, 0x2C, vec![0x00, 0x27, 0x0f, 0x00, 0x00, 0x00]),
         GetPresetSlots => reply(dev, 0x22, vec![0; 20]),
+        // `0x29 [i]` names U(i+1); i = 20 names the current program, as the
+        // real unit does (protocol.md §4.2).
         GetPresetName(n) => {
-            let p = st.presets.get(*n as usize)?;
-            let mut d = vec![*n];
-            d.extend_from_slice(&p.name);
+            let name = match n {
+                1..=20 => st.presets.get(*n as usize)?.name,
+                21 => st.program.name,
+                _ => return None,
+            };
+            let mut d = vec![dsp206_proto::command::name_index(*n)];
+            d.extend_from_slice(&name);
             reply(dev, 0x29, d)
         }
         ReadProgramPage(p) if (*p as usize) < PAGE_COUNT => {

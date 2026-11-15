@@ -62,7 +62,7 @@ fn reads_everything_from_device() {
         .iter()
         .filter(|e| matches!(e, Event::PresetName { .. }))
         .count();
-    assert_eq!(names, 21);
+    assert_eq!(names, 20);
     let pages = events
         .iter()
         .filter(|e| matches!(e, Event::Page { .. }))
