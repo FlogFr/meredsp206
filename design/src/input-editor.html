@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>meredsp206 – Input channel editor</title>
+<link rel="stylesheet" href="adw.css">
+<script src="eq.js"></script>
+<style>
+  .sidebar { width: 200px; flex: none; background: var(--view); border-right: 1px solid #00000066; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .sidebar .caption { padding: 10px 10px 4px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+  .ch { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; }
+  .ch.sel { background: #ffffff1a; }
+  .ch .lvl { width: 4px; height: 22px; border-radius: 2px; background: linear-gradient(to top, var(--meter-green) var(--l), #ffffff20 var(--l)); }
+  .ch small { color: var(--fg-dim); margin-left: auto; }
+  .main { flex: 1; padding: 16px; display: flex; gap: 14px; min-width: 0; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .titlebar { display: flex; align-items: center; gap: 10px; }
+  .titlebar h1 { font-size: 20px; margin: 0; }
+  .card.pad { padding: 12px; }
+  .tabs { display: inline-flex; background: #ffffff10; border-radius: 8px; padding: 2px; }
+  .tabs span { padding: 5px 14px; border-radius: 6px; font-weight: 600; color: var(--fg-dim); }
+  .tabs span.on { background: #ffffff26; color: var(--fg); }
+  .geq { display: flex; gap: 4px; height: 300px; align-items: stretch; padding: 8px 4px 0; }
+  .band { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .band .t { flex: 1; width: 4px; border-radius: 2px; background: #00000066; position: relative; }
+  .band .t::before { content: ""; position: absolute; left: -6px; right: -6px; top: 50%; height: 1px; background: #ffffff30; }
+  .band .k { position: absolute; left: 50%; width: 20px; height: 12px; margin-left: -10px; border-radius: 3px; background: linear-gradient(#e8e8ea, #b9b9be); box-shadow: 0 1px 3px #000a; }
+  .band .fill { position: absolute; left: 0; right: 0; background: var(--accent-bg); border-radius: 2px; }
+  .band small { font-size: 9.5px; color: var(--fg-dim); white-space: nowrap; }
+  .band b { font-size: 9.5px; font-variant-numeric: tabular-nums; }
+  .switch { width: 40px; height: 22px; border-radius: 11px; background: #ffffff26; position: relative; display: inline-block; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+  .switch.on { background: var(--accent-bg); } .switch.on::after { left: 20px; }
+  .sub { padding: 10px 12px 2px; font-weight: 700; color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .seg { display: inline-flex; border-radius: 6px; overflow: hidden; background: #ffffff12; }
+  .seg span { padding: 4px 10px; font-weight: 600; color: var(--fg-dim); }
+  .seg span.on { background: #ffffff26; color: var(--fg); }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="headerbar">
+    <span class="btn"><span class="dot"></span>DSP 206 · 192.168.1.101</span>
+    <span class="btn icon flat">↶</span><span class="btn icon flat">↷</span>
+    <div class="title"><div class="switcher" style="justify-content:center">
+      <span class="btn">Mixer</span><span class="btn on">Channel</span><span class="btn">Routing</span><span class="btn">Presets</span>
+    </div></div>
+    <span class="btn">U03 · Main PA 3-way ▾</span>
+    <span class="btn icon flat">☰</span>
+  </div>
+  <div class="content">
+    <div class="sidebar">
+      <span class="caption">Inputs</span>
+      <div class="ch sel"><span class="lvl" style="--l:62%"></span><b>Left</b><small>InA</small></div>
+      <div class="ch"><span class="lvl" style="--l:58%"></span>Right<small>InB</small></div>
+      <span class="caption">Outputs</span>
+      <div class="ch"><span class="lvl" style="--l:70%"></span>Sub L<small>Out1</small></div>
+      <div class="ch"><span class="lvl" style="--l:68%"></span>Sub R<small>Out2</small></div>
+      <div class="ch"><span class="lvl" style="--l:55%"></span>Mid L<small>Out3</small></div>
+      <div class="ch"><span class="lvl" style="--l:53%"></span>Mid R<small>Out4</small></div>
+      <div class="ch"><span class="lvl" style="--l:44%"></span>High L<small>Out5</small></div>
+      <div class="ch"><span class="lvl" style="--l:0%"></span>High R<small>Out6</small></div>
+    </div>
+    <div class="main">
+      <div class="col" style="flex:1">
+        <div class="titlebar">
+          <h1>Left</h1><span class="caption">InA · linked with InB</span>
+          <span class="tabs" style="margin-left:16px"><span>Parametric EQ</span><span class="on">Graphic EQ</span></span>
+          <span style="margin-left:auto" class="btn">Flatten</span><span class="pill bypass">GEQ bypass</span>
+        </div>
+        <div class="card pad"><svg id="plot"></svg></div>
+        <div class="card pad"><div class="geq" id="geq"></div></div>
+      </div>
+      <div class="col" style="width:330px;flex:none">
+        <div class="card">
+          <div class="sub">Noise gate</div>
+          <div class="row"><span class="caption">Threshold</span><div class="slider"><i style="width:20%"></i><b style="left:20%"></b></div><span class="val">-72.0 dB</span></div>
+          <div class="row"><span class="caption">Attack</span><span class="val">1 ms</span><span class="caption">Hold</span><span class="val">100 ms</span></div>
+          <div class="row"><span class="caption">Release</span><span class="val">100 ms</span><span class="caption">State</span><span class="val" style="color:var(--green)">open</span></div>
+        </div>
+        <div class="card">
+          <div class="sub">Filters</div>
+          <div class="row"><span>High-pass</span><span class="val">25.3 Hz</span><span class="combo">BW -12 ▾</span></div>
+          <div class="row"><span>Low-pass</span><span class="val">20.16 kHz</span><span class="combo">BW -12 ▾</span></div>
+        </div>
+        <div class="card">
+          <div class="sub">Input</div>
+          <div class="row"><span class="caption">Gain</span><div class="slider"><i style="width:70%"></i><b style="left:70%"></b></div><span class="val">+0.0 dB</span></div>
+          <div class="row"><span class="caption">Delay</span><span class="val">0.00 ms</span><span class="seg"><span class="on">ms</span><span>m</span><span>ft</span></span></div>
+          <div class="row"><span class="caption">Polarity inverted</span><span class="switch"></span></div>
+          <div class="row"><span class="caption">Mute</span><span class="switch"></span></div>
+        </div>
+        <div class="card">
+          <div class="sub">Level</div>
+          <div class="row"><span class="caption">Input meter</span><span class="val">-14.2 dBu</span></div>
+          <div class="row"><span class="caption">Peak hold</span><span class="val">-6.8 dBu</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="statusbar"><span>● Connected over TCP 9761</span><span>Graphic EQ: 31 bands, ±12 dB, 0.1 dB steps</span></div>
+</div>
+<script>
+const freqs=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
+const gains=[0,0,0,1.5,2,1.5,0.5,0,-1,-2,-2.5,-1.5,0,0,0,0,0.5,1,1,0.5,0,-1,-2.5,-3,-2,-1,0,0.5,1,1.5,1];
+const g=document.getElementById('geq');
+freqs.forEach((f,i)=>{
+  const d=gains[i], pos=50-d/12*50;
+  const lab=f>=1000?(f/1000)+'k':f;
+  const el=document.createElement('div'); el.className='band';
+  const fillTop=Math.min(pos,50), fillH=Math.abs(pos-50);
+  el.innerHTML=`<b>${d>0?'+':''}${d.toFixed(1)}</b><div class="t"><div class="fill" style="top:${fillTop}%;height:${fillH}%"></div><div class="k" style="top:calc(${pos}% - 6px)"></div></div><small>${lab}</small>`;
+  g.appendChild(el);
+});
+const bands=freqs.map((f,i)=>({type:'peak',f,g:gains[i],q:4.3}));
+eqPlot(document.getElementById('plot'),{w:830,h:250,bands:[],hp:25});
+// overlay the GEQ curve as the combined response
+const svg=document.getElementById('plot'), ns='http://www.w3.org/2000/svg', w=830, h=250, range=15;
+const fx=f=>(Math.log10(f/20)/3)*w, dy=d=>h/2-d/range*(h/2-8);
+const fns=bands.filter(b=>b.g!==0).map(b=>biquad(b.type,b.f,b.g,b.q));
+let p='';for(let i=0;i<=600;i++){const f=20*Math.pow(1000,i/600);const d=fns.reduce((s,fn)=>s+fn(f),0)+lr24hp(25)(f);p+=(i?'L':'M')+fx(f).toFixed(1)+','+dy(Math.max(-range,d)).toFixed(1);}
+const path=document.createElementNS(ns,'path');path.setAttribute('d',p);path.setAttribute('fill','none');path.setAttribute('stroke','#f8e45c');path.setAttribute('stroke-width','2.5');svg.appendChild(path);
+</script>
+</body>
+</html>

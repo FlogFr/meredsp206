@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>meredsp206 – Output channel editor</title>
+<link rel="stylesheet" href="adw.css">
+<script src="eq.js"></script>
+<style>
+  .sidebar { width: 200px; flex: none; background: var(--view); border-right: 1px solid #00000066; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .sidebar .caption { padding: 10px 10px 4px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+  .ch { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; }
+  .ch.sel { background: #ffffff1a; }
+  .ch .lvl { width: 4px; height: 22px; border-radius: 2px; background: linear-gradient(to top, var(--meter-green) var(--l), #ffffff20 var(--l)); }
+  .ch small { color: var(--fg-dim); margin-left: auto; }
+  .ch .m { width: 8px; height: 8px; border-radius: 50%; background: var(--red-bg); }
+  .main { flex: 1; padding: 16px; display: flex; gap: 14px; min-width: 0; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .titlebar { display: flex; align-items: center; gap: 10px; }
+  .titlebar h1 { font-size: 20px; margin: 0; }
+  .card.pad { padding: 12px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: var(--fg-dim); font-weight: 600; font-size: 11.5px; padding: 6px 10px; }
+  td { padding: 0 10px; height: 31px; border-top: 1px solid var(--border); }
+  tr.sel td { background: #3584e426; }
+  tr.byp td { color: var(--fg-faint); }
+  .switch { width: 40px; height: 22px; border-radius: 11px; background: #ffffff26; position: relative; display: inline-block; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+  .switch.on { background: var(--accent-bg); } .switch.on::after { left: 20px; }
+  .switch.amber.on { background: var(--amber-bg); }
+  .seg { display: inline-flex; border-radius: 6px; overflow: hidden; background: #ffffff12; }
+  .seg span { padding: 4px 10px; font-weight: 600; color: var(--fg-dim); }
+  .seg span.on { background: #ffffff26; color: var(--fg); }
+  .sub { padding: 10px 12px 2px; font-weight: 700; color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="headerbar">
+    <span class="btn"><span class="dot"></span>DSP 206 · 192.168.1.101</span>
+    <span class="btn icon flat">↶</span><span class="btn icon flat">↷</span>
+    <div class="title"><div class="switcher" style="justify-content:center">
+      <span class="btn">Mixer</span><span class="btn on">Channel</span><span class="btn">Routing</span><span class="btn">Presets</span>
+    </div></div>
+    <span class="btn">U03 · Main PA 3-way ▾</span>
+    <span class="btn icon flat">☰</span>
+  </div>
+  <div class="content">
+    <div class="sidebar">
+      <span class="caption">Inputs</span>
+      <div class="ch"><span class="lvl" style="--l:62%"></span>Left<small>InA</small></div>
+      <div class="ch"><span class="lvl" style="--l:58%"></span>Right<small>InB</small></div>
+      <span class="caption">Outputs</span>
+      <div class="ch"><span class="lvl" style="--l:70%"></span>Sub L<small>Out1</small></div>
+      <div class="ch"><span class="lvl" style="--l:68%"></span>Sub R<small>Out2</small></div>
+      <div class="ch sel"><span class="lvl" style="--l:55%"></span><b>Mid L</b><small>Out3</small></div>
+      <div class="ch"><span class="lvl" style="--l:53%"></span>Mid R<small>Out4</small></div>
+      <div class="ch"><span class="lvl" style="--l:44%"></span>High L<small>Out5</small></div>
+      <div class="ch"><span class="lvl" style="--l:0%"></span>High R<span class="m" style="margin-left:6px"></span><small>Out6</small></div>
+      <div style="margin-top:auto" class="caption">Linked with Out4</div>
+    </div>
+    <div class="main">
+      <div class="col" style="flex:1">
+        <div class="titlebar">
+          <h1>Mid L</h1><span class="caption">Out3 · linked with Out4</span>
+          <span style="margin-left:auto" class="btn">Copy to…</span><span class="btn">Show all EQ</span><span class="btn">Reset EQ</span>
+          <span class="pill">EQ bypass</span>
+        </div>
+        <div class="card pad"><svg id="plot"></svg></div>
+        <div class="card">
+          <table id="bands"><tr><th>#</th><th>Type</th><th>Frequency</th><th>Gain</th><th>Q</th><th>Bypass</th></tr></table>
+        </div>
+      </div>
+      <div class="col" style="width:330px;flex:none">
+        <div class="card">
+          <div class="sub">Crossover</div>
+          <div class="row"><span>High-pass</span><span class="val">95.1 Hz</span><span class="combo">LK -24 ▾</span><span class="switch amber"></span></div>
+          <div class="row"><span>Low-pass</span><span class="val">1.60 kHz</span><span class="combo">LK -24 ▾</span><span class="switch amber"></span></div>
+        </div>
+        <div class="card">
+          <div class="sub">RMS compressor</div>
+          <div class="row"><span class="caption">Threshold</span><div class="slider"><i style="width:70%"></i><b style="left:70%"></b></div><span class="val">-12.0 dB</span></div>
+          <div class="row"><span class="caption">Ratio</span><span class="combo">4.0:1 ▾</span><span class="caption">Knee</span><span class="val">6 dB</span></div>
+          <div class="row"><span class="caption">Attack</span><span class="val">20 ms</span><span class="caption">Release</span><span class="val">200 ms</span></div>
+          <div class="sub">Peak limiter</div>
+          <div class="row"><span class="caption">Threshold</span><div class="slider"><i style="width:87%"></i><b style="left:87%"></b></div><span class="val">+6.0 dB</span></div>
+          <div class="row"><span class="caption">Attack</span><span class="val">5 ms</span><span class="caption">Release</span><span class="val">100 ms</span></div>
+        </div>
+        <div class="card">
+          <div class="sub">Output</div>
+          <div class="row"><span class="caption">Gain</span><div class="slider"><i style="width:70%"></i><b style="left:70%"></b></div><span class="val">+0.0 dB</span></div>
+          <div class="row"><span class="caption">Delay</span><span class="val">0.83 ms</span><span class="seg"><span class="on">ms</span><span>m</span><span>ft</span></span></div>
+          <div class="row"><span class="caption">Polarity inverted</span><span class="switch"></span></div>
+          <div class="row"><span class="caption">Mute</span><span class="switch"></span></div>
+        </div>
+        <div class="card">
+          <div class="sub">Routing</div>
+          <div class="row"><span>InA · Left</span><span class="val">+0.0 dB</span><span class="switch on"></span></div>
+          <div class="row"><span>InB · Right</span><span class="val caption">-60.0 dB</span><span class="switch"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="statusbar"><span>● Connected over TCP 9761</span><span>Band 3 selected · drag handles, ←/→ frequency, ↑/↓ gain, +/− Q</span></div>
+</div>
+<script>
+const bands = [
+  {type:'peak', t:'Peak', f:120, g:-2.0, q:1.4},
+  {type:'peak', t:'Peak', f:250, g:1.5, q:2.0},
+  {type:'peak', t:'Peak', f:500, g:-3.5, q:3.0, sel:true},
+  {type:'peak', t:'Peak', f:800, g:0, q:3.0, bypass:true},
+  {type:'peak', t:'Peak', f:1100, g:2.0, q:4.0},
+  {type:'highshelf', t:'High Shelf', f:1400, g:-1.5, q:0.71},
+  {type:'peak', t:'Peak', f:3150, g:0, q:3.0, bypass:true},
+  {type:'peak', t:'Peak', f:6300, g:0, q:3.0, bypass:true},
+  {type:'peak', t:'Peak', f:12500, g:0, q:3.0, bypass:true},
+];
+eqPlot(document.getElementById('plot'), {w: 830, h: 360, bands, hp: 95, lp: 1600});
+const tb = document.getElementById('bands');
+const fmtF = f => f >= 1000 ? (f/1000).toFixed(2) + ' kHz' : f.toFixed(1) + ' Hz';
+bands.forEach((b, i) => {
+  const tr = document.createElement('tr');
+  if (b.sel) tr.className = 'sel'; if (b.bypass) tr.className = 'byp';
+  tr.innerHTML = `<td><b>${i+1}</b></td><td><span class="combo">${b.t} ▾</span></td><td>${fmtF(b.f)}</td><td>${(b.g>0?'+':'')+b.g.toFixed(1)} dB</td><td>${b.q.toFixed(2)}</td><td><span class="switch amber ${b.bypass?'on':''}"></span></td>`;
+  tb.appendChild(tr);
+});
+</script>
+</body>
+</html>

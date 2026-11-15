@@ -1,0 +1,10 @@
+import re,ast,sys
+t=open(sys.argv[1]).read()
+m=re.search(r"RichText = ((['\"]).*?\2)\n",t,re.S)
+rtf=ast.literal_eval(m.group(1))
+x=rtf.replace('\r\n','')
+x=re.sub(r'\\par[d]?\b','\n',x); x=re.sub(r'\\tab\b',' \t',x)
+x=re.sub(r"\\'([0-9a-f]{2})",lambda m: '?' ,x)
+x=re.sub(r'\{\\fonttbl.*?\}\}','',x,flags=re.S); x=re.sub(r'\{\\colortbl.*?\}','',x)
+x=re.sub(r'\\[a-z]+-?\d* ?','',x); x=re.sub(r'[{}]','',x)
+print(x)

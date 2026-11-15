@@ -1,0 +1,9 @@
+[package]
+name = "dsp206-proto"
+description = "Wire protocol, program memory map and unit conversions of the t.racks DSP 206"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true

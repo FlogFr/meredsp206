@@ -1,0 +1,12 @@
+# Vendor installer and anything extracted from it (never commit, see claude/rules/reverse-engineering.md)
+*.exe
+/vendor/
+/extract/
+
+# Rust
+/target/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
