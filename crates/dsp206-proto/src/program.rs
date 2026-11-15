@@ -27,6 +27,8 @@ pub enum ProgramError {
     BadPage(u8),
     /// A page reply carried more than [`PAGE_SIZE`] bytes.
     PageTooLong(usize),
+    /// Not a native program file (wrong magic or size).
+    BadFile,
 }
 
 impl fmt::Display for ProgramError {
@@ -35,6 +37,7 @@ impl fmt::Display for ProgramError {
             ProgramError::TooShort(n) => write!(f, "program needs {PROGRAM_SIZE} bytes, got {n}"),
             ProgramError::BadPage(p) => write!(f, "page {p} is outside 0..{PAGE_COUNT}"),
             ProgramError::PageTooLong(n) => write!(f, "page carries {n} bytes, max {PAGE_SIZE}"),
+            ProgramError::BadFile => write!(f, "not a DSP 206 program file"),
         }
     }
 }

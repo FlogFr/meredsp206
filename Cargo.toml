@@ -1,6 +1,6 @@
 [workspace]
-resolver = "2"
-members = ["crates/dsp206-proto"]
+resolver = "3"
+members = ["crates/dsp206-proto", "crates/dsp206-link", "crates/dsp206-cli", "crates/dsp206-gtk"]
 
 [workspace.package]
 version = "0.1.0"

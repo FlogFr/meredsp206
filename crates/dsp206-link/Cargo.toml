@@ -1,0 +1,12 @@
+[package]
+name = "dsp206-link"
+description = "Network session, discovery and simulated device for the t.racks DSP 206"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+dsp206-proto = { path = "../dsp206-proto" }
+
+[lints]
+workspace = true

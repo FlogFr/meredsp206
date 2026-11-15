@@ -144,15 +144,31 @@ pub enum Request {
         ch: Channel,
         name: [u8; NAME_LEN],
     },
+    /// Test-tone generator: `source` is a [`ToneSource`] value, `freq` the sine
+    /// frequency as an index into `units::GEQ_BANDS_HZ` (0 = 20 Hz).
+    TestTone {
+        source: u8,
+        freq: u8,
+    },
+}
+
+/// Test-tone sources (`TfmTest` radio button tags) [code].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToneSource {
+    AnalogInput = 0,
+    PinkNoise = 1,
+    WhiteNoise = 2,
+    Sine = 3,
 }
 
 /// Command codes that only read device state (claude/rules/device-safety.md).
 pub const READ_ONLY_CODES: [u8; 9] = [0x10, 0x11, 0x13, 0x14, 0x22, 0x27, 0x29, 0x2C, 0x40];
 
 /// Every command code a [`Request`] can produce, sorted.
-pub const ALL_CODES: [u8; 32] = [
+pub const ALL_CODES: [u8; 33] = [
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x20, 0x21, 0x22, 0x26, 0x27, 0x29, 0x2A, 0x2C, 0x30, 0x31,
-    0x32, 0x33, 0x34, 0x35, 0x36, 0x38, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40, 0x41, 0x48, 0x49,
+    0x32, 0x33, 0x34, 0x35, 0x36, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40, 0x41, 0x48,
+    0x49,
 ];
 
 fn words(out: &mut Vec<u8>, ws: &[u16]) {
@@ -187,6 +203,7 @@ impl Request {
             SetMute { .. } => 0x35,
             SetPolarity { .. } => 0x36,
             SetDelay { .. } => 0x38,
+            TestTone { .. } => 0x39,
             SetRouting { .. } => 0x3A,
             SetLink { .. } => 0x3B,
             SetPeqBypass { .. } => 0x3C,
@@ -259,8 +276,141 @@ impl Request {
                 d.push(ch.0);
                 d.extend_from_slice(name);
             }
+            TestTone { source, freq } => d.extend_from_slice(&[*source, *freq]),
         }
         d
+    }
+
+    /// Decode a request from its command byte and payload (inverse of
+    /// [`Request::payload`]). Used by the simulated device.
+    pub fn parse(cmd: u8, d: &[u8]) -> Option<Request> {
+        use Request::*;
+        let w =
+            |i: usize| -> Option<u16> { Some(u16::from_le_bytes([*d.get(i)?, *d.get(i + 1)?])) };
+        let b = |i: usize| -> Option<u8> { d.get(i).copied() };
+        let ch = |i: usize| -> Option<Channel> { Channel::new(*d.get(i)?) };
+        let exact = |n: usize| (d.len() == n).then_some(());
+        Some(match cmd {
+            0x10 => exact(0).map(|_| Connect)?,
+            0x11 => exact(0).map(|_| Disconnect)?,
+            0x12 => exact(0).map(|_| EndOfTransfer)?,
+            0x13 => exact(0).map(|_| Identify)?,
+            0x14 => exact(0).map(|_| GetCurrentPreset)?,
+            0x15 => SetDelayUnit(b(0)?),
+            0x20 => StorePreset(b(0)?),
+            0x21 => RecallPreset(b(0)?),
+            0x22 => exact(0).map(|_| GetPresetSlots)?,
+            0x26 => SetPresetName(d.try_into().ok()?),
+            0x27 => ReadProgramPage(b(0)?),
+            0x29 => GetPresetName(b(0)?),
+            0x2A => CopyChannel {
+                src: ch(0)?,
+                dst: ch(1)?,
+            },
+            0x2C => exact(0).map(|_| GetLockState)?,
+            0x30 => SetCompressor {
+                ch: ch(0)?,
+                comp: Compressor {
+                    ratio: w(1)?,
+                    attack: w(3)?,
+                    release: w(5)?,
+                    knee: w(7)?,
+                    threshold: w(9)?,
+                },
+            },
+            0x31 | 0x32 => {
+                let filter = CutFilter {
+                    freq: w(1)?,
+                    slope: b(3)?,
+                };
+                if cmd == 0x31 {
+                    SetLowPass { ch: ch(0)?, filter }
+                } else {
+                    SetHighPass { ch: ch(0)?, filter }
+                }
+            }
+            0x33 => SetPeqBand {
+                ch: ch(0)?,
+                band: b(1)?,
+                value: PeqBand {
+                    gain: w(2)?,
+                    freq: w(4)?,
+                    q: b(6)?,
+                    kind: b(7)?,
+                },
+                bypass: b(8)? != 0,
+            },
+            0x34 => SetGain {
+                ch: ch(0)?,
+                raw: w(1)?,
+            },
+            0x35 => SetMute {
+                ch: ch(0)?,
+                on: b(1)? != 0,
+            },
+            0x36 => SetPolarity {
+                ch: ch(0)?,
+                inverted: b(1)? != 0,
+            },
+            0x38 => SetDelay {
+                ch: ch(0)?,
+                raw: w(1)?,
+            },
+            0x39 => TestTone {
+                source: b(0)?,
+                freq: b(1)?,
+            },
+            0x3A => SetRouting {
+                ch: ch(0)?,
+                mask: b(1)?,
+            },
+            0x3B => SetLink {
+                ch: ch(0)?,
+                mask: b(1)?,
+            },
+            0x3C => SetPeqBypass {
+                ch: ch(0)?,
+                on: b(1)? != 0,
+            },
+            0x3D => SetChannelName {
+                ch: ch(0)?,
+                name: d.get(1..1 + NAME_LEN)?.try_into().ok()?,
+            },
+            0x3E => SetGate {
+                ch: ch(0)?,
+                gate: Gate {
+                    attack: w(1)?,
+                    hold: w(3)?,
+                    release: w(5)?,
+                    threshold: w(7)?,
+                },
+            },
+            0x3F => SetLimiter {
+                ch: ch(0)?,
+                limiter: Limiter {
+                    attack: w(1)?,
+                    release: w(3)?,
+                    knee: w(5)?,
+                    threshold: w(7)?,
+                },
+            },
+            0x40 => exact(0).map(|_| GetMeters)?,
+            0x41 => SetMixGain {
+                ch: ch(0)?,
+                input: b(1)?,
+                raw: w(2)?,
+            },
+            0x48 => SetGeqBand {
+                ch: ch(0)?,
+                band: b(1)?,
+                gain: w(2)?,
+            },
+            0x49 => SetGeqBypass {
+                ch: ch(0)?,
+                on: b(1)? != 0,
+            },
+            _ => return None,
+        })
     }
 
     /// The frame for device `dev`.
@@ -307,7 +457,7 @@ impl Request {
             | SetRouting { ch, .. }
             | SetLink { ch, .. }
             | SetChannelName { ch, .. } => Some((self.code(), ch.0, 0)),
-            SetDelayUnit(_) => Some((self.code(), 0, 0)),
+            SetDelayUnit(_) | TestTone { .. } => Some((self.code(), 0, 0)),
             _ => None,
         }
     }
@@ -581,6 +731,13 @@ mod tests {
                 },
                 "02 53 75 62 20 4c 00 00 00",
             ),
+            (
+                Request::TestTone {
+                    source: ToneSource::Sine as u8,
+                    freq: 17,
+                },
+                "03 11",
+            ),
         ]
     }
 
@@ -589,6 +746,21 @@ mod tests {
         for (req, expected) in examples() {
             assert_eq!(hex(&req.payload()), expected, "{req:?}");
         }
+    }
+
+    #[test]
+    fn parse_inverts_payload() {
+        for (req, _) in examples() {
+            assert_eq!(
+                Request::parse(req.code(), &req.payload()),
+                Some(req.clone()),
+                "{req:?}"
+            );
+        }
+        assert_eq!(Request::parse(0x34, &[0x02, 0x18]), None); // truncated
+        assert_eq!(Request::parse(0x34, &[0x08, 0x18, 0x01]), None); // bad channel
+        assert_eq!(Request::parse(0x10, &[0x00]), None); // unexpected payload
+        assert_eq!(Request::parse(0x77, &[]), None);
     }
 
     #[test]

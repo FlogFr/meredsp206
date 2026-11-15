@@ -1,0 +1,17 @@
+[package]
+name = "dsp206-cli"
+description = "Command-line tool for the t.racks DSP 206"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "dsp206"
+path = "src/main.rs"
+
+[dependencies]
+dsp206-proto = { path = "../dsp206-proto" }
+dsp206-link = { path = "../dsp206-link" }
+
+[lints]
+workspace = true

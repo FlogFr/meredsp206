@@ -183,3 +183,23 @@ fn captured_pages_match_factory_defaults() {
     assert_eq!((p.outputs[4].gain, p.outputs[4].link), (280, 1 << 4));
     assert_eq!(&p.outputs[5].name[..4], b"Out6");
 }
+
+#[test]
+fn factory_default_matches_every_captured_page() {
+    let factory = Program::factory_default().to_pages();
+    let mut checked = 0;
+    for (dir, bytes) in frames(CAPTURES[0].1) {
+        if dir != "rx" {
+            continue;
+        }
+        if let Reply::ProgramPage { page, data } = Reply::parse(&Frame::decode(&bytes).unwrap()) {
+            assert_eq!(
+                &factory[page as usize][..data.len()],
+                &data[..],
+                "page {page}"
+            );
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 10);
+}

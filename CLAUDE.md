@@ -5,9 +5,12 @@ t.racks DSP 206 loudspeaker processor over the LAN. It replaces the Windows-only
 *the t.racks DSP 206 Processor Editor V1.05*, whose protocol was reverse engineered
 for this project.
 
-Status: protocol and memory map documented. The pure protocol crate
-`crates/dsp206-proto` (frames, commands, replies, 928-byte program, unit
-conversions) is implemented and tested. Link layer, CLI and GUI are not written yet.
+Status (2026-11-15): first full implementation, awaiting the user's tests on hardware.
+`dsp206-proto` (protocol, program, edits, files), `dsp206-link` (TCP session,
+discovery, simulated device), `dsp206` CLI and the `meredsp206` GTK app are written
+and tested against the simulated device. Setters were never sent to the real unit
+by Claude (device-safety.md). Open issue: the real unit stops answering ~1–2 s
+after connect (connection.md); docs for the new crates are not written yet.
 
 ## Working agreement (applies to every request)
 
@@ -60,7 +63,10 @@ conversions) is implemented and tested. Link layer, CLI and GUI are not written 
 
 | Path | Content |
 |---|---|
-| `crates/dsp206-proto/` | Protocol crate: `frame`, `command`, `program`, `units` modules, plus `tests/` (captures, docs sync) |
+| `crates/dsp206-proto/` | Protocol crate: `frame`, `command`, `program`, `edit`, `units` modules, plus `tests/` (captures, docs sync) |
+| `crates/dsp206-link/` | `Link` worker (one request in flight, retries, coalescing), UDP discovery, `MockDevice` |
+| `crates/dsp206-cli/` | `dsp206` command-line tool |
+| `crates/dsp206-gtk/` | `meredsp206` GTK 4 / libadwaita app (`model`, `format`, `response` are pure and tested) |
 | `tools/probe/` | Read-only device dump tool (`dsp206_dump.py`) |
 | `tools/re/` | Reverse-engineering scripts and `captures/` (real frames, used as test vectors) |
 | `tools/tests/` | Python tests for the tools and the docs |
@@ -90,6 +96,10 @@ make lint
 make fmt
 make design         # re-render design/*.png from design/src/*.html
 ```
+
+Run the app: `cargo run -p dsp206-gtk -- --demo` (simulated unit) or `-- --connect 192.168.1.101`.
+CLI: `cargo run -p dsp206-cli -- help`. The workspace uses `resolver = "3"` so
+dependencies stay compatible with Rust 1.84.
 
 Read-only device dump (wait 60 s between runs):
 `python3 -I tools/probe/dsp206_dump.py -o dump.json`.
