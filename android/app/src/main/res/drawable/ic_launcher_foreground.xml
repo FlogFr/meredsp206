@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three faders with level bars: an original mark, no vendor artwork. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#3DDC84" android:pathData="M36,40h6v32h-6z" />
+    <path android:fillColor="#3DDC84" android:pathData="M51,34h6v38h-6z" />
+    <path android:fillColor="#F5D42E" android:pathData="M66,46h6v26h-6z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M33,52h12v5h-12z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M48,44h12v5h-12z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M63,58h12v5h-12z" />
+</vector>

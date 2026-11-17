@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- t.racks DSP 206: VID 0x0168 ("Musicrown"), PID 0x0821 (protocol.md §1.2). -->
+<resources>
+    <usb-device vendor-id="360" product-id="2081" />
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- aapt2 moves an adaptive icon with <monochrome> (API 33) out of a plain
+         mipmap-anydpi folder, leaving API 26-32 without an icon. -->
+    <issue id="ObsoleteSdkInt">
+        <ignore path="src/main/res/mipmap-anydpi-v26" />
+    </issue>
+</lint>

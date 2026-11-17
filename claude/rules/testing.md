@@ -6,7 +6,9 @@ so a later change cannot silently break it. Maintain them on every request.
 ## Always
 
 - Run `make check` (rustfmt, clippy with `-D warnings`, Rust tests, Python
-  tests) before calling any change done. Report failures honestly, never skip
+  tests) before calling any change done. When a change touches `android/` or
+  the protocol, also run `make android-check` (JDK 17+ and Android SDK), or at
+  least `make android-core` (JDK only). Report failures honestly, never skip
   or weaken a test to get green.
 - **Every change ships with tests.** A new protocol fact, command, field,
   conversion or bug fix gets a test in the same change. A bug fix starts with a
@@ -25,6 +27,9 @@ so a later change cannot silently break it. Maintain them on every request.
 | Code ↔ docs ↔ tools consistency (command codes documented, read-only whitelist identical in code, `device-safety.md` and the probe) | `crates/dsp206-proto/tests/docs_sync.rs` | `cargo test` |
 | Python tools (frame builder, whitelist, summary) | `tools/tests/test_probe.py` | `make test-python` |
 | Docs hygiene (relative links, `CLAUDE.md` index complete, design PNG has a source, docs in English) | `tools/tests/test_docs.py` | `make test-python` |
+| Rust ↔ Kotlin agreement (command codes, USB IDs, French strings complete) | `tools/tests/test_android.py` | `make test-python` |
+| Kotlin port of the protocol, link and model, real-device captures, code ↔ docs ↔ Rust | `android/core/src/test/kotlin/` | `make android-core` |
+| Android UI on Robolectric with the simulated unit (writes screenshots) | `android/app/src/test/kotlin/` | `make android-check` |
 
 ## Writing good tests here
 

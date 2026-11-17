@@ -87,8 +87,7 @@ fn parse_settings(words: &[String]) -> Result<Vec<Request>, String> {
     let mut out = Vec::new();
     let mut it = words.iter();
     let mut next = |what: &str| it.next().cloned().ok_or_else(|| format!("missing {what}"));
-    loop {
-        let Ok(setting) = next("setting") else { break };
+    while let Ok(setting) = next("setting") {
         let req = match setting.as_str() {
             "gain" => {
                 let ch = parse_channel(&next("channel")?)?;

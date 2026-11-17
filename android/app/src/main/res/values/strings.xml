@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Mere DSP 206</string>
+
+    <!-- Navigation and common actions -->
+    <string name="tab_device">Device</string>
+    <string name="tab_mixer">Mixer</string>
+    <string name="tab_channel">Channel</string>
+    <string name="tab_presets">Presets</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="send">Send</string>
+    <string name="decrease">Decrease %1$s</string>
+    <string name="increase">Increase %1$s</string>
+
+    <!-- Link status (top bar) -->
+    <string name="status_offline">Offline</string>
+    <string name="status_connecting">Connecting to %1$s…</string>
+    <string name="status_network">Network · %1$s</string>
+    <string name="status_usb">USB</string>
+    <string name="status_demo">Demo (simulated unit)</string>
+    <string name="status_silent">%1$s · not answering</string>
+
+    <!-- Device screen -->
+    <string name="device_status">Connection</string>
+    <string name="device_identity">Unit: %1$s</string>
+    <string name="device_current_preset">Preset %1$s · program “%2$s”</string>
+    <string name="device_reading">Reading the program (page %1$d/%2$d)</string>
+    <string name="device_counters">Unconfirmed changes: %1$d · unanswered reads: %2$d</string>
+    <string name="device_missing_pages">Program pages missing: %1$d</string>
+    <string name="device_reconnect_wait">After a network session, the unit may not answer for about %1$d s.</string>
+    <string name="device_read_again">Read again</string>
+    <string name="device_retry_pages">Retry missing pages</string>
+    <string name="device_disconnect">Disconnect</string>
+    <string name="network_title">Network (Wi-Fi)</string>
+    <string name="network_no_wifi">The phone is not on a Wi-Fi network.</string>
+    <string name="network_phone_address">Phone address: %1$s</string>
+    <string name="network_search">Search the network</string>
+    <string name="network_search_hint">Search finds units on the same network. You can also type the address (factory setting 192.168.1.101).</string>
+    <string name="network_address">Unit address (IP)</string>
+    <string name="network_connect">Connect</string>
+    <string name="network_warning">Over the network the unit accepts one client at a time, and some units stop answering a few seconds after connecting. USB is more reliable.</string>
+    <string name="usb_title">USB (OTG cable)</string>
+    <string name="usb_present">A DSP 206 is plugged in.</string>
+    <string name="usb_absent">No DSP 206 plugged in.</string>
+    <string name="usb_hint">Use a USB-C OTG adapter and the unit\'s USB cable. Android asks once for permission.</string>
+    <string name="usb_connect">Connect over USB</string>
+    <string name="demo_title">Demo</string>
+    <string name="demo_hint">Try the app with a simulated unit. Nothing is sent to a real device.</string>
+    <string name="demo_start">Start the demo</string>
+    <string name="advanced_title">Advanced</string>
+    <string name="device_id">Device ID</string>
+    <string name="device_id_hint">1–254, factory setting 1</string>
+    <string name="log_open">Protocol log</string>
+    <string name="log_title">Protocol log</string>
+    <string name="log_clear">Clear</string>
+
+    <!-- Mixer -->
+    <string name="mute">Mute</string>
+    <string name="gain">Gain</string>
+    <string name="mixer_linked">%1$s · linked</string>
+    <string name="mixer_open_editor">Open the channel editor</string>
+    <string name="mixer_from">From</string>
+
+    <!-- Channel editor -->
+    <string name="section_level">%1$s · level and delay</string>
+    <string name="channel_name">Name (8 characters)</string>
+    <string name="polarity">Polarity inverted</string>
+    <string name="delay">Delay</string>
+    <string name="delay_unit">Delay unit (whole unit)</string>
+    <string name="section_peq">Parametric EQ</string>
+    <string name="flat">Flat</string>
+    <string name="eq_graph_description">Frequency response of %1$s. Tap a numbered point to select a band.</string>
+    <string name="peq_bypass">Bypass the parametric EQ</string>
+    <string name="peq_type">Filter type</string>
+    <string name="frequency">Frequency</string>
+    <string name="q">Q</string>
+    <string name="band_bypass">Bypass band %1$d</string>
+    <string name="section_geq">Graphic EQ (31 bands)</string>
+    <string name="geq_description">Graphic EQ of %1$s</string>
+    <string name="geq_hint">Drag across the bars to set the bands (±12 dB).</string>
+    <string name="geq_bypass">Bypass the graphic EQ</string>
+    <string name="section_crossover">Crossover</string>
+    <string name="high_pass">High-pass</string>
+    <string name="low_pass">Low-pass</string>
+    <string name="slope">Slope</string>
+    <string name="section_gate">Noise gate</string>
+    <string name="threshold">Threshold</string>
+    <string name="attack">Attack</string>
+    <string name="hold">Hold</string>
+    <string name="release">Release</string>
+    <string name="knee">Knee</string>
+    <string name="section_routing">Routing</string>
+    <string name="routing_from">From %1$s</string>
+    <string name="mix_gain">Level from %1$s</string>
+    <string name="section_compressor">Compressor</string>
+    <string name="ratio">Ratio</string>
+    <string name="section_limiter">Limiter</string>
+    <string name="section_link">Link and copy</string>
+    <string name="link_hint">Linked channels follow each other\'s processing changes (names stay separate).</string>
+    <string name="copy_hint">Copy every setting of %1$s to another channel (its name and routing stay).</string>
+    <string name="copy_to">Copy to…</string>
+
+    <!-- Presets -->
+    <string name="presets_current">Current program</string>
+    <string name="presets_loaded_from">Loaded from %1$s</string>
+    <string name="presets_offline">Offline: changes stay on the phone until you connect.</string>
+    <string name="presets_used">stored</string>
+    <string name="presets_current_marker">Running now</string>
+    <string name="file_save">Save to a file</string>
+    <string name="file_open">Open a file</string>
+    <string name="push_program">Send the whole program to the unit</string>
+    <string name="push_program_text">Every setting shown in the app is sent to the unit. The sound changes to match the app.</string>
+    <string name="preset_load">Load</string>
+    <string name="preset_load_title">Load %1$s “%2$s”?</string>
+    <string name="preset_load_text">The unit replaces its current settings with this preset. The sound changes at once.</string>
+    <string name="preset_store">Store</string>
+    <string name="preset_store_title">Store into %1$s</string>
+    <string name="preset_store_text">The current settings are saved into %1$s, replacing “%2$s”.</string>
+    <string name="preset_name">Preset name</string>
+    <string name="preset_name_hint">Up to 14 characters, no accents</string>
+
+    <!-- Snackbars -->
+    <string name="notice_connected_network">Connected over the network, reading the program…</string>
+    <string name="notice_connected_usb">Connected over USB, reading the program…</string>
+    <string name="notice_connected_demo">Demo started with a simulated unit</string>
+    <string name="notice_connect_failed">Cannot connect: %1$s</string>
+    <string name="notice_not_an_address">“%1$s” is not an IP address</string>
+    <string name="notice_reconnect_soon">The unit may stay silent for about %1$d s after the last session; connecting anyway</string>
+    <string name="notice_no_usb">No DSP 206 found on USB</string>
+    <string name="notice_usb_denied">USB access was refused</string>
+    <string name="notice_not_connected">Not connected</string>
+    <string name="notice_recalling">Loading %1$s…</string>
+    <string name="notice_storing">Storing %1$s “%2$s”…</string>
+    <plurals name="notice_sending">
+        <item quantity="one">Sending %1$d setting to the unit</item>
+        <item quantity="other">Sending %1$d settings to the unit</item>
+    </plurals>
+    <string name="notice_file_saved">Program saved</string>
+    <string name="notice_file_invalid">This is not a DSP 206 program file</string>
+    <string name="notice_copied">Copied %1$s to %2$s</string>
+    <string name="notice_program_read">Program read from the unit</string>
+    <string name="notice_program_incomplete">%1$d of 19 program pages did not arrive. Use “Retry missing pages” later.</string>
+    <string name="notice_silent">The unit stopped answering. Changes are still sent but not confirmed.</string>
+    <string name="notice_disconnected">Disconnected</string>
+    <string name="notice_remote_closed">The unit closed the connection</string>
+    <string name="notice_link_error">Connection lost: %1$s</string>
+    <string name="notice_stored">Stored %1$s “%2$s”</string>
+    <string name="notice_not_stored">%1$s was not stored: the unit still names it “%2$s”</string>
+    <string name="notice_store_unconfirmed">The unit did not confirm storing %1$s</string>
+    <string name="notice_recall_unconfirmed">The unit did not confirm loading %1$s</string>
+</resources>

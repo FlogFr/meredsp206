@@ -27,6 +27,8 @@ crates/
   dsp206-gtk/     GTK 4 / libadwaita application `meredsp206`
 data/udev/        udev rule giving the logged-in user access to the USB unit
 data/             (planned) .desktop file, AppStream metainfo, icons
+android/          Android app (Gradle): Kotlin port of proto + link in `core`,
+                  Jetpack Compose UI in `app`, see android.md
 ```
 
 ### 2.1 `dsp206-proto` (implemented)
@@ -80,6 +82,13 @@ Only depends on `dsp206-proto` and `std`.
 - Offline mode edits a `Program` with no device and can push it later.
 
 See `design/*.png` for the target look.
+
+### 2.4 Android app
+
+A separate Gradle project under `android/`, described in
+[android.md](android.md). Its `core` module is a Kotlin port of
+`dsp206-proto`, `dsp206-link` and the GTK app's model (no JNI to the Rust
+crates); tests keep the two implementations in step.
 
 ## 3. Build, test and packaging
 

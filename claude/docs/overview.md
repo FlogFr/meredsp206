@@ -1,7 +1,9 @@
 # Product overview
 
 **meredsp206** is a Linux replacement for *the t.racks DSP 206 Processor Editor*
-(Windows only). It controls a t.racks DSP 206 loudspeaker processor over the LAN.
+(Windows only). It controls a t.racks DSP 206 loudspeaker processor over the LAN
+or USB. An Android app does the same from a phone, over Wi-Fi or USB OTG
+([android.md](android.md)).
 
 ## 1. The device
 

@@ -21,6 +21,19 @@ See `claude/docs/architecture.md` for the crates and `testing.md` for tests.
 - Before finishing: `make check` (runs `cargo fmt --check`, `cargo clippy -D warnings`
   and every test).
 
+## Kotlin (Android app, `android/`)
+
+- See `claude/docs/android.md`. `core` is plain Kotlin/JVM: no Android API,
+  testable with `./gradlew :core:test`. Android code lives in `app`.
+- **The Kotlin port mirrors the Rust crates.** A protocol fact, command or
+  encoding changed in `crates/dsp206-proto` or `crates/dsp206-link` changes in
+  `android/core` in the same commit, with the same test.
+- Compiler warnings are errors (`allWarningsAsErrors`), and Android lint
+  warnings are errors. User-visible text goes in `res/values/strings.xml` with
+  its French translation in `res/values-fr/strings.xml`.
+- Keep dependencies to AndroidX and Compose. Versions live in
+  `android/gradle/libs.versions.toml`.
+
 ## Python tools
 
 - Standard library only, run with `python3 -I`. Tests in `tools/tests/` use

@@ -3,7 +3,8 @@
 A native Linux editor for the **t.racks DSP 206** loudspeaker processor (2 in /
 6 out), controlled over USB or the local network. It aims to cover every feature
 of the Windows-only *the t.racks DSP 206 Processor Editor V1.05*, with a
-cleaner, faster interface.
+cleaner, faster interface. An **Android app** controls the same unit from a
+phone, over Wi-Fi or USB OTG (see [Android app](#android-app)).
 
 > **Project status: early.** The device protocol has been reverse engineered and
 > documented ([claude/docs/protocol.md](claude/docs/protocol.md)). The protocol
@@ -106,6 +107,53 @@ Good to know: the DSP accepts only one network connection at a time. Close the
 Windows editor or any other client first. After a network disconnection, wait
 about one minute before reconnecting.
 
+## Android app
+
+The app in [`android/`](android/) controls the unit from an Android phone
+(Android 8.0 or newer): over Wi-Fi when the unit's Ethernet port is on the same
+network as the phone, or over USB with a USB-C OTG adapter. It has a mixer view
+with meters, a channel editor (gain, delay, parametric and graphic EQ,
+crossover, gate, compressor, limiter, routing, links), presets, program files,
+a protocol log and a demo mode with a simulated unit. English and French.
+
+> **Status: first version.** Tested against the simulated unit only; not yet
+> on a phone or on the real unit. Over the network, our unit stops answering a
+> second or two after connecting ([connection behaviour](claude/docs/connection.md));
+> try USB OTG if that happens.
+
+### Try it on a phone
+
+1. On the phone: *Settings → About phone*, tap *Build number* seven times, then
+   enable *Developer options → USB debugging*.
+2. Install [Android Studio](https://developer.android.com/studio), open the
+   `android/` folder, plug the phone in over USB, accept the debugging prompt
+   on the phone and press *Run*.
+
+Or from a terminal, with the Android SDK installed (`ANDROID_HOME` set):
+
+```bash
+cd android && ./gradlew installDebug
+```
+
+Or install the APK file directly: download `app-debug.apk` (from the
+*Android* workflow run on GitHub, *Artifacts*), open it on the phone and allow
+installing apps from that source.
+
+In the app: *Device* page → *Start the demo* to look around without a unit, or
+*Search the network* / type the unit's address (factory `192.168.1.101`) and
+*Connect*. The phone and the unit must be on the same subnet.
+
+### Build and check
+
+```bash
+make android-core     # protocol tests on the JVM (JDK 17+ only)
+make android-check    # + UI tests on Robolectric and Android lint (needs the SDK)
+make android-apk      # android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Publishing on Google Play (signing, App Bundle, listing) is described in
+[claude/docs/android.md](claude/docs/android.md#4-publishing-on-google-play-checklist).
+
 ## Development
 
 Requirements: Rust 1.84 or newer (`cargo`, `rustfmt`, `clippy`), Python 3, `make`.
@@ -126,6 +174,7 @@ for the tools and the documentation. Other targets: `make test`, `make lint`,
 - [Program memory map and value encodings](claude/docs/memory-map.md)
 - [Connection behaviour](claude/docs/connection.md)
 - [Planned architecture](claude/docs/architecture.md)
+- [Android app](claude/docs/android.md)
 
 ## Legal
 

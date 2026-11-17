@@ -3,7 +3,9 @@
 **meredsp206**: a native Linux app (Rust + GTK 4/libadwaita) to control a
 t.racks DSP 206 loudspeaker processor over USB or the LAN. It replaces the Windows-only
 *the t.racks DSP 206 Processor Editor V1.05*, whose protocol was reverse engineered
-for this project.
+for this project. An Android app (Kotlin + Jetpack Compose, `android/`) controls the
+same unit from a phone over Wi-Fi or USB OTG; the user wants to publish it on Google
+Play and tests on a Motorola Moto G86.
 
 Status (2026-11-15): first full implementation, awaiting the user's tests on hardware.
 `dsp206-proto` (protocol, program, edits, files, USB HID framing), `dsp206-link`
@@ -20,6 +22,12 @@ loaded U01 on the unit. Fixed from the original editor's state machine
 the app read back the wrong name (`0x29` counts U01 from 0); fixed the same day,
 the corrected read-back is not yet tried on hardware.
 
+Android app (2026-11-17): first version written, see [claude/docs/android.md](claude/docs/android.md).
+`android/core` is a Kotlin port of `dsp206-proto`, `dsp206-link` and the GTK model,
+tested on the JVM with the same captures; `android/app` is the Compose UI (device,
+mixer, channel editor, presets, log, demo). Builds, lint clean, Robolectric UI tests
+pass against the simulated unit. Not yet tried on a phone or on the real unit.
+
 ## Working agreement (applies to every request)
 
 1. **Keep this file current.** At the end of each user request, update
@@ -34,6 +42,8 @@ the corrected read-back is not yet tried on hardware.
    English.
 4. Never send state-changing commands to the real device without approval. See
    [claude/rules/device-safety.md](claude/rules/device-safety.md).
+5. Keep the Android port in step: a protocol change in the Rust crates goes into
+   `android/core` in the same commit, with its test (claude/rules/coding.md).
 
 ## Rules (instructions for you, always apply)
 
@@ -43,8 +53,8 @@ the corrected read-back is not yet tried on hardware.
   where each kind of test lives, `make check`.
 - [claude/rules/documentation.md](claude/rules/documentation.md): docs in English,
   where each kind of doc lives, confidence tags, keep docs in sync.
-- [claude/rules/coding.md](claude/rules/coding.md): Rust workspace conventions and
-  performance.
+- [claude/rules/coding.md](claude/rules/coding.md): Rust workspace and Kotlin
+  (Android) conventions, performance.
 - [claude/rules/reverse-engineering.md](claude/rules/reverse-engineering.md):
   handling vendor files, scratch dirs, recording findings.
 - [claude/rules/design.md](claude/rules/design.md): how `design/*.png` is produced
@@ -66,6 +76,8 @@ the corrected read-back is not yet tried on hardware.
   Windows editor and its key function addresses.
 - [claude/docs/reverse-engineering.md](claude/docs/reverse-engineering.md): method,
   tools, what remains.
+- [claude/docs/android.md](claude/docs/android.md): Android app: layout, why a
+  Kotlin port, build and test, phone behaviour, Google Play checklist.
 
 ## Repository layout
 
@@ -75,10 +87,13 @@ the corrected read-back is not yet tried on hardware.
 | `crates/dsp206-link/` | `Link` worker over TCP or USB HID (one request in flight, retries, coalescing), UDP and USB discovery, `MockDevice` |
 | `crates/dsp206-cli/` | `dsp206` command-line tool |
 | `crates/dsp206-gtk/` | `meredsp206` GTK 4 / libadwaita app (`model`, `format`, `response` are pure and tested) |
+| `android/core/` | Kotlin/JVM port: `dsp206.proto`, `dsp206.link` (worker, TCP, HID, discovery, `MockDevice`), `dsp206.editor` (model, session, format, response) |
+| `android/app/` | Android app `io.github.flogfr.meredsp206` (Compose, Material 3), Robolectric UI tests |
+| `.github/workflows/android.yml` | CI: Android tests, lint, debug APK artifact |
 | `data/udev/` | udev rule giving the logged-in user access to the USB unit (`/dev/hidrawN`) |
 | `tools/probe/` | Read-only device dump tool (`dsp206_dump.py`) |
 | `tools/re/` | Reverse-engineering scripts and `captures/` (real frames, used as test vectors) |
-| `tools/tests/` | Python tests for the tools and the docs |
+| `tools/tests/` | Python tests for the tools, the docs and the Rust ↔ Kotlin agreement |
 | `design/` | Target UI mockups (`*.png`), HTML sources (`src/`), `render.sh` |
 | `claude/` | Docs (`docs/`) and rules (`rules/`) for Claude |
 | `README.md` | User documentation, build and install instructions |
@@ -113,7 +128,15 @@ make test-python    # python3 -I -m unittest discover -s tools/tests
 make lint
 make fmt
 make design         # re-render design/*.png from design/src/*.html
+make android-core   # Kotlin core tests on the JVM (JDK 17+)
+make android-check  # + Robolectric UI tests and Android lint (needs the Android SDK)
+make android-apk    # debug APK: android/app/build/outputs/apk/debug/app-debug.apk
 ```
+
+Android SDK in a cloud session: the `meredsp206` environment allows `dl.google.com`,
+`maven.google.com` and `gcp.mirrors.maven.org`. Install `platforms;android-37.0`
+and `build-tools;36.0.0` with `sdkmanager` (the user accepted the SDK licence on
+2026-11-17) and write `sdk.dir=...` to `android/local.properties`.
 
 Run the app: `cargo run -p dsp206-gtk -- --demo` (simulated unit), `-- --usb` or
 `-- --connect 192.168.1.101`. CLI: `cargo run -p dsp206-cli -- help`

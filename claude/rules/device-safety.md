@@ -26,8 +26,8 @@ gain, and test on an unused output when possible.
 
 ## Always
 
-- Use the mock device (`dsp206-link::MockDevice`) for automated tests. Tests must
-  never touch the network.
+- Use the mock device (`dsp206-link::MockDevice`, or `dsp206.link.MockDevice`
+  in `android/core`) for automated tests. Tests must never touch the network.
 - Never loop reconnects. Never run background pollers against the device and leave
   them running.
 - Log every frame sent to the real device during experiments. Store useful
