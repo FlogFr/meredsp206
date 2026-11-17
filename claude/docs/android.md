@@ -109,6 +109,10 @@ check the Play Console before each release.
 - **Offline.** Without a connection, edits change the local program, which can
   be saved to a `.dsp206` file (same format as the GTK app) and sent later.
 - Languages: English (default) and French (`values-fr`).
+- Icon: an adaptive icon (background, foreground and themed monochrome
+  layers, `res/drawable/ic_launcher_*.xml`) generated with the Linux icon and
+  the Play Store icon `android/store/icon-512.png` by `tools/icon/make_icons.py`
+  (`make icons`).
 
 ## 4. Publishing on Google Play (checklist)
 
@@ -124,7 +128,8 @@ check the Play Console before each release.
 5. In Play Console: create the app, enable Play App Signing, upload the bundle
    to internal testing first, fill in the data safety form (the app collects
    no data and has no network service of its own), a privacy policy URL,
-   screenshots (the UI tests produce some) and the content rating.
+   screenshots (the UI tests produce some; Play wants a ratio of at most 2:1)
+   and the content rating. The 512 px icon is `android/store/icon-512.png`.
 6. The application ID `io.github.flogfr.meredsp206` cannot change after the
    first upload.
 7. Name and listing: say "for the t.racks DSP 206" but do not use the t.racks

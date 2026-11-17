@@ -91,6 +91,9 @@ pass against the simulated unit. Not yet tried on a phone or on the real unit.
 | `android/app/` | Android app `io.github.flogfr.meredsp206` (Compose, Material 3), Robolectric UI tests |
 | `.github/workflows/android.yml` | CI: Android tests, lint, debug APK artifact |
 | `data/udev/` | udev rule giving the logged-in user access to the USB unit (`/dev/hidrawN`) |
+| `data/` | Desktop entry `org.meredsp206.Editor.desktop` and app icon `icons/hicolor/` (installed by `make install`) |
+| `tools/icon/` | `make_icons.py`: the app icon drawn once, written for Linux, Android and the Play Store |
+| `android/store/` | Google Play listing assets (512 px icon) |
 | `tools/probe/` | Read-only device dump tool (`dsp206_dump.py`) |
 | `tools/re/` | Reverse-engineering scripts and `captures/` (real frames, used as test vectors) |
 | `tools/tests/` | Python tests for the tools, the docs and the Rust ↔ Kotlin agreement |
@@ -131,6 +134,8 @@ make design         # re-render design/*.png from design/src/*.html
 make android-core   # Kotlin core tests on the JVM (JDK 17+)
 make android-check  # + Robolectric UI tests and Android lint (needs the Android SDK)
 make android-apk    # debug APK: android/app/build/outputs/apk/debug/app-debug.apk
+make icons          # regenerate every app icon from tools/icon/make_icons.py
+sudo make install PREFIX=/usr/local   # after cargo build --release: binaries, desktop entry, icon
 ```
 
 Android SDK in a cloud session: the `meredsp206` environment allows `dl.google.com`,

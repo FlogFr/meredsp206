@@ -100,6 +100,7 @@ pub fn run(opts: Options) -> glib::ExitCode {
             win.present();
             return;
         }
+        set_icon();
         let app = App::new();
         let ui = crate::ui::build(application, &app);
         ui.window.present();
@@ -535,6 +536,21 @@ impl App {
         }
     }
 }
+
+/// Windows take the app icon from the icon theme (`make install` puts it in
+/// `share/icons/hicolor`). A development build also finds it in the
+/// repository's `data/icons`, so `cargo run` shows it too.
+fn set_icon() {
+    if cfg!(debug_assertions) {
+        if let Some(display) = gtk::gdk::Display::default() {
+            gtk::IconTheme::for_display(&display).add_search_path(DEV_ICONS);
+        }
+    }
+    gtk::Window::set_default_icon_name(APP_ID);
+}
+
+/// `data/icons` in the source tree (used by debug builds only).
+const DEV_ICONS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/icons");
 
 /// `ina`, `inb`, `out1`..`out6`.
 pub fn parse_channel(s: &str) -> Option<Channel> {

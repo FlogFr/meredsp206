@@ -73,14 +73,19 @@ cargo build --release
 The binaries are written to `target/release/`: `meredsp206` (GUI) and `dsp206`
 (command-line tool).
 
-## Install (planned)
+## Install
+
+Build as your normal user, then install as root:
 
 ```bash
+cargo build --release
 sudo make install PREFIX=/usr/local
 ```
 
-This installs both binaries, a desktop entry and an icon. Remove them with
-`sudo make uninstall PREFIX=/usr/local`.
+This installs both binaries (`meredsp206`, `dsp206`), the desktop entry
+*Mere DSP 206* and its icon, so the app appears in the GNOME application grid.
+Remove them with `sudo make uninstall PREFIX=/usr/local`. Packagers can set
+`DESTDIR`.
 
 ## Usage
 

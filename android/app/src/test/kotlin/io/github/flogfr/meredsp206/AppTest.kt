@@ -58,6 +58,22 @@ class AppTest {
     }
 
     @Test
+    fun launcherIconIsAdaptiveWithAThemedLayer() {
+        val icon = androidx.core.content.ContextCompat.getDrawable(compose.activity, R.mipmap.ic_launcher)
+        assertTrue(icon is android.graphics.drawable.AdaptiveIconDrawable)
+        val adaptive = icon as android.graphics.drawable.AdaptiveIconDrawable
+        assertTrue(adaptive.monochrome != null)
+        // Draw it the way a launcher does, for a look at the result.
+        val bitmap = Bitmap.createBitmap(432, 432, Bitmap.Config.ARGB_8888)
+        adaptive.setBounds(0, 0, 432, 432)
+        adaptive.draw(android.graphics.Canvas(bitmap))
+        val dir = File("build/screenshots").apply { mkdirs() }
+        File(dir, "0-launcher-icon.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // The background gradient fills the corners and the motif the centre.
+        assertTrue(bitmap.getPixel(216, 216) != bitmap.getPixel(2, 2))
+    }
+
+    @Test
     fun deviceScreenOffline() {
         assertEquals(2, compose.onAllNodesWithText("Offline").fetchSemanticsNodes().size) // top bar and status card
         compose.onNodeWithText("Network (Wi-Fi)").assertExists()

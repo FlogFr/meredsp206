@@ -26,7 +26,10 @@ crates/
   dsp206-cli/     `dsp206` command-line tool: discover, info, dump, meters, set
   dsp206-gtk/     GTK 4 / libadwaita application `meredsp206`
 data/udev/        udev rule giving the logged-in user access to the USB unit
-data/             (planned) .desktop file, AppStream metainfo, icons
+data/             desktop entry org.meredsp206.Editor.desktop, app icon in
+                  icons/hicolor (both installed by make install); AppStream
+                  metainfo is still planned
+tools/icon/       make_icons.py: one drawing for every app icon (Linux, Android, Play Store)
 android/          Android app (Gradle): Kotlin port of proto + link in `core`,
                   Jetpack Compose UI in `app`, see android.md
 ```
@@ -95,5 +98,7 @@ crates); tests keep the two implementations in step.
 - `make check` runs rustfmt, clippy (`-D warnings`) and all Rust and Python tests.
 - `cargo build --release` will produce `target/release/meredsp206` and `dsp206`.
 - Build dependencies on Debian: `libgtk-4-dev`, `libadwaita-1-dev`, `pkg-config`.
-- `make install PREFIX=/usr/local` installs binaries, the `.desktop` file and icons.
-  A `.deb` can be produced later with `cargo-deb`.
+- `make install PREFIX=/usr/local` installs the release binaries, the `.desktop`
+  file and the icon (it does not build: run `cargo build --release` first).
+  The GTK app sets its window icon to the app ID; debug builds also look in
+  `data/icons`. A `.deb` can be produced later with `cargo-deb`.

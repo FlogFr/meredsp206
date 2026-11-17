@@ -4,7 +4,7 @@ import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SKIP = {".git", "target"}
+SKIP = {".git", "target", "build", ".gradle", ".kotlin"}  # VCS and build outputs
 
 
 def markdown_files():

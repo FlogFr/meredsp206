@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Mere DSP 206
+GenericName=Loudspeaker Processor Editor
+Comment=Control a t.racks DSP 206 loudspeaker processor over USB or the network
+Exec=meredsp206
+Icon=org.meredsp206.Editor
+Terminal=false
+Categories=AudioVideo;Audio;
+Keywords=DSP;EQ;equalizer;crossover;loudspeaker;speaker;processor;
+StartupNotify=true
